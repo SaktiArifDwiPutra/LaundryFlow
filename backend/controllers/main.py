@@ -241,3 +241,119 @@ class CustomerApiController(http.Controller):
                 'success': False,
                 'message': 'Terjadi kesalahan internal pada server'
             }, status=500)
+
+    # Endpoint Penambahan Pelanggan Baru LaundryFlow
+    @http.route(
+        ['/api/laundry/customers', '/api/customers', '/api/laundry/customers/create', '/api/customers/create'],
+        type='http',
+        auth='public',
+        methods=['POST', 'OPTIONS'],
+        csrf=False
+    )
+    def create_customer(self, **kwargs):
+        if request.httprequest.method == 'OPTIONS':
+            return self._json_response({'status': 'ok'})
+
+        try:
+            # 1. Autentikasi Pengguna
+            user = self._get_authenticated_user()
+            if not user:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Autentikasi diperlukan. Akses tidak diizinkan.'
+                }, status=401)
+
+            # 2. Hak Akses (Authorization)
+            try:
+                request.env['res.partner'].with_user(user).check_access('create')
+            except AccessError:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Akses ditolak: Anda tidak memiliki izin untuk membuat data pelanggan.'
+                }, status=403)
+
+            # 3. Pemeriksaan awal format request (Request Validation)
+            raw_data = request.httprequest.data
+            body = None
+            if raw_data:
+                try:
+                    body = json.loads(raw_data.decode('utf-8'))
+                except (ValueError, UnicodeDecodeError):
+                    return self._json_response({
+                        'success': False,
+                        'message': 'Format request tidak valid, data harus berformat JSON'
+                    }, status=400)
+            elif kwargs:
+                body = kwargs
+            elif getattr(request, 'params', None):
+                body = dict(request.params)
+
+            if not body or not isinstance(body, dict):
+                return self._json_response({
+                    'success': False,
+                    'message': 'Request body tidak boleh kosong dan harus berupa objek JSON'
+                }, status=400)
+
+            # 4. Validasi Field Wajib (Name & Phone)
+            name = body.get('name')
+            if not name or not isinstance(name, str) or not name.strip():
+                return self._json_response({
+                    'success': False,
+                    'message': 'Field name wajib diisi'
+                }, status=400)
+            name = name.strip()
+
+            phone = body.get('phone')
+            if not phone or not isinstance(phone, str) or not phone.strip():
+                return self._json_response({
+                    'success': False,
+                    'message': 'Field phone wajib diisi'
+                }, status=400)
+            phone = phone.strip()
+
+            # 5. Ekstraksi Field Opsional
+            street = body.get('street') or body.get('address') or ''
+            street = street.strip() if isinstance(street, str) else ''
+
+            email = body.get('email') or ''
+            email = email.strip() if isinstance(email, str) else ''
+
+            city = body.get('city') or ''
+            city = city.strip() if isinstance(city, str) else ''
+
+            # 6. Pembuatan Record Pelanggan via ORM Odoo
+            vals = {
+                'name': name,
+                'phone': phone,
+                'customer_rank': 1,
+            }
+            if street:
+                vals['street'] = street
+            if email:
+                vals['email'] = email
+            if city:
+                vals['city'] = city
+
+            new_partner = request.env['res.partner'].with_user(user).create(vals)
+
+            # 7. Format data hasil respon
+            return self._json_response({
+                'success': True,
+                'message': 'Pelanggan berhasil ditambahkan',
+                'data': {
+                    'id': new_partner.id,
+                    'name': new_partner.name or '',
+                    'phone': new_partner.phone or '',
+                    'email': new_partner.email or '',
+                    'street': new_partner.street or '',
+                    'city': new_partner.city or '',
+                    'address': new_partner.street or '',
+                }
+            }, status=201)
+
+        except Exception as e:
+            _logger.exception("Error creating customer: %s", str(e))
+            return self._json_response({
+                'success': False,
+                'message': 'Terjadi kesalahan internal pada server'
+            }, status=500)
