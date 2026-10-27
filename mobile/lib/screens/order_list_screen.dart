@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-
 import '../models/order.dart';
 import '../repositories/repositories.dart';
 import '../utils/format.dart';
 import '../widgets/status_chip.dart';
 import 'order_detail_screen.dart';
+import 'new_order_screen.dart';
 
 class OrderListScreen extends StatefulWidget {
   const OrderListScreen({super.key});
@@ -36,10 +36,26 @@ class _OrderListScreenState extends State<OrderListScreen> {
     _reload();
   }
 
+  Future<void> _newOrder() async {
+    final created = await Navigator.of(context).push<Order>(
+      MaterialPageRoute(builder: (_) => const NewOrderScreen()),
+    );
+    if (created == null || !mounted) return;
+    _reload();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Pesanan ${created.number} dibuat')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Pesanan')),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _newOrder,
+          icon: const Icon(Icons.add),
+          label: const Text('Pesanan Baru'),
+        ),
       body: FutureBuilder<List<Order>>(
         future: _future,
         builder: (context, snapshot) {
@@ -64,7 +80,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
             },
             child: ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.only(top: 8, bottom: 88),
               itemCount: orders.length,
               itemBuilder: (context, index) => _OrderCard(
                 order: orders[index],

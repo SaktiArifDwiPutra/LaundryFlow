@@ -4,8 +4,8 @@ import '../repositories/repositories.dart';
 import 'customer_form_screen.dart';
 
 class CustomerListScreen extends StatefulWidget {
-  const CustomerListScreen({super.key});
-
+  const CustomerListScreen({super.key, this.selectMode = false});
+  final bool selectMode;
   @override
   State<CustomerListScreen> createState() => _CustomerListScreenState();
 }
@@ -49,7 +49,9 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Pelanggan')),
+      appBar: AppBar(
+        title: Text(widget.selectMode ? 'Pilih Pelanggan' : 'Pelanggan'),
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _addCustomer,
         child: const Icon(Icons.person_add),
@@ -99,6 +101,9 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                       ),
                       title: Text(c.name),
                       subtitle: Text(c.phone),
+                      onTap: widget.selectMode
+                          ? () => Navigator.of(context).pop(c)
+                          : null,
                     );
                   },
                 );
