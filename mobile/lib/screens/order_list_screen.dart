@@ -1,107 +1,131 @@
 import 'package:flutter/material.dart';
 
-import '../data/mock_data.dart';
 import '../models/order.dart';
-import '../models/order_status.dart';
+import '../repositories/repositories.dart';
 import '../utils/format.dart';
+import '../widgets/status_chip.dart';
+import 'order_detail_screen.dart';
 
-class OrderListScreen extends StatelessWidget {
+class OrderListScreen extends StatefulWidget {
   const OrderListScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final orders = mockOrders;
+  State<OrderListScreen> createState() => _OrderListScreenState();
+}
 
+class _OrderListScreenState extends State<OrderListScreen> {
+  late Future<List<Order>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = orderRepository.list();
+  }
+
+  void _reload() {
+    setState(() {
+      _future = orderRepository.list();
+    });
+  }
+
+  Future<void> _openDetail(Order order) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => OrderDetailScreen(orderId: order.id)),
+    );
+    if (!mounted) return;
+    _reload();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Pesanan')),
-      body: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: orders.length,
-        itemBuilder: (context, index) => _OrderCard(order: orders[index]),
+      body: FutureBuilder<List<Order>>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('Gagal memuat pesanan: ${snapshot.error}'),
+            );
+          }
+
+          final orders = snapshot.data!;
+          if (orders.isEmpty) {
+            return const Center(child: Text('Belum ada pesanan.'));
+          }
+
+          return RefreshIndicator(
+            onRefresh: () async {
+              _reload();
+              await _future;
+            },
+            child: ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: orders.length,
+              itemBuilder: (context, index) => _OrderCard(
+                order: orders[index],
+                onTap: () => _openDetail(orders[index]),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
 }
 
 class _OrderCard extends StatelessWidget {
-  const _OrderCard({required this.order});
+  const _OrderCard({required this.order, required this.onTap});
 
   final Order order;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final service =
-        order.lines.isEmpty ? '-' : order.lines.first.serviceName;
+    final service = order.lines.isEmpty ? '-' : order.lines.first.serviceName;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      order.customer.name,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${order.number} • $service',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    order.customer.name,
-                    style: Theme.of(context).textTheme.titleMedium,
+                    formatRupiah(order.total),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${order.number} • $service',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
+                  const SizedBox(height: 6),
+                  StatusChip(status: order.status),
                 ],
               ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  formatRupiah(order.total),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 6),
-                _StatusChip(status: order.status),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
-
-  final OrderStatus status;
-
-  Color get _color => switch (status) {
-        OrderStatus.received => Colors.blueGrey,
-        OrderStatus.washing => Colors.blue,
-        OrderStatus.drying => Colors.orange,
-        OrderStatus.ironing => Colors.deepPurple,
-        OrderStatus.ready => Colors.green,
-        OrderStatus.completed => Colors.grey,
-        OrderStatus.unknown => Colors.red,
-      };
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: _color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        status.label,
-        style: TextStyle(
-          color: _color,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
+            ],
+          ),
         ),
       ),
     );

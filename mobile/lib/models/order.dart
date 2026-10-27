@@ -74,6 +74,21 @@ class Order {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  Order copyWith({OrderStatus? status, DateTime? updatedAt}) {
+    return Order(
+      id: id,
+      number: number,
+      status: status ?? this.status,
+      customer: customer,
+      lines: lines,
+      total: total,
+      currency: currency,
+      notes: notes,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
   factory Order.fromJson(Map<String, dynamic> json) {
     return Order(
       id: json['id'] as int,

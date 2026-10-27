@@ -7,3 +7,6 @@ String formatRupiah(int value) {
   }
   return 'Rp $buf';
 }
+
+String formatQty(double qty) =>
+    qty % 1 == 0 ? qty.toInt().toString() : qty.toString();
