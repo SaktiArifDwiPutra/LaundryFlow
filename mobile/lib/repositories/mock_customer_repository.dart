@@ -1,4 +1,4 @@
-import '../data/mock_customer.dart';
+import '../data/mock_customers.dart';
 import '../models/customer.dart';
 import 'customer_repository.dart';
 

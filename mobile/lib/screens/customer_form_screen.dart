@@ -3,6 +3,7 @@ import '../models/customer.dart';
 import '../repositories/customer_repository.dart';
 import '../repositories/repositories.dart';
 import '../utils/phone.dart';
+import '../api/api_exception.dart';
 
 class CustomerFormScreen extends StatefulWidget {
   const CustomerFormScreen({super.key});
@@ -42,6 +43,9 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       if (!mounted) return;
       Navigator.of(context).pop(created);
     } on DuplicateCustomerException catch (e) {
+      if (!mounted) return;
+      setState(() => _serverError = e.message);
+    } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _serverError = e.message);
     } finally {

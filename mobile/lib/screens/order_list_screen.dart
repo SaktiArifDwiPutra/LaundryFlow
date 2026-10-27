@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import '../session.dart';
 import '../models/order.dart';
 import '../models/order_status.dart';
 import '../repositories/repositories.dart';
@@ -90,7 +90,19 @@ class _OrderListScreenState extends State<OrderListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Pesanan')),
+            appBar: AppBar(
+        title: const Text('Pesanan'),
+        actions: [
+          IconButton(
+            tooltip: 'Keluar',
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await authRepository.logout();
+              currentUser.value = null;
+            },
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _newOrder,
         icon: const Icon(Icons.add),
