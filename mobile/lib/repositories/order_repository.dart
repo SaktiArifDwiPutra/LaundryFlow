@@ -10,7 +10,7 @@ class OrderLineInput {
   final double qty;
 }
 abstract class OrderRepository {
-  Future<List<Order>> list({OrderStatus? status});
+  Future<List<Order>> list({OrderStatus? status, String q = ''});
   Future<Order> get(int id);
   Future<Order> create({
     required Customer customer,

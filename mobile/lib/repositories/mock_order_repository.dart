@@ -11,10 +11,16 @@ class MockOrderRepository implements OrderRepository {
       Future.delayed(const Duration(milliseconds: 400));
 
   @override
-  Future<List<Order>> list({OrderStatus? status}) async {
+  Future<List<Order>> list({OrderStatus? status, String q = ''}) async {
     await _fakeDelay();
-    final Iterable<Order> result =
-        status == null ? _orders : _orders.where((o) => o.status == status);
+    final query = q.toLowerCase();
+    final result = _orders.where((o) {
+      if (status != null && o.status != status) return false;
+      if (query.isEmpty) return true;
+      return o.customer.name.toLowerCase().contains(query) ||
+          o.customer.phone.contains(query) ||
+          o.number.toLowerCase().contains(query);
+    });
     return List.unmodifiable(result);
   }
 
