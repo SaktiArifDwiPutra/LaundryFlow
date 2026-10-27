@@ -12,14 +12,17 @@ class MockCustomerRepository implements CustomerRepository {
   @override
   Future<List<Customer>> list({String q = ''}) async {
     await _fakeDelay();
-    final query = q.toLowerCase();
-    final result = _customers.where(
-      (c) => query.isEmpty ||
-          c.name.toLowerCase().contains(query) ||
-          c.phone.contains(query),
-    ).toList()
+    final query = q.trim().toLowerCase();
+    if (query.isEmpty) return const [];
+
+    final result = _customers
+        .where(
+          (c) =>
+              c.name.toLowerCase().contains(query) || c.phone.contains(query),
+        )
+        .toList()
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    return result;
+    return result.take(20).toList(); // limit bawaan backend
   }
 
   @override
@@ -39,7 +42,7 @@ class MockCustomerRepository implements CustomerRepository {
       id: _nextId++,
       name: name,
       phone: phone,
-      address: address,
+      street: address,
     );
     _customers.add(customer);
     return customer;
