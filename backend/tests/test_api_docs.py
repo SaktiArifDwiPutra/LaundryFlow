@@ -19,7 +19,7 @@ class TestApiDocs(TransactionCase):
         super().setUpClass()
         cls.docs_controller = ApiDocsController()
 
-    def _mock_request(self, method="GET", host_url="http://localhost:8069/"):
+    def _mock_request(self, method="GET", host_url="http://117.53.47.93:8069/"):
         mock_req = MagicMock()
         mock_req.env = self.env
         mock_req.httprequest.method = method
@@ -38,6 +38,7 @@ class TestApiDocs(TransactionCase):
             spec = json.loads(response.get_data(as_text=True))
             self.assertEqual(spec.get("openapi"), "3.0.3")
             self.assertEqual(spec.get("info", {}).get("title"), "LaundryFlow API")
+            self.assertEqual(spec.get("servers", [{}])[0].get("url"), "http://117.53.47.93:8069")
             self.assertIn("paths", spec)
             self.assertIn("components", spec)
 
@@ -64,3 +65,4 @@ class TestApiDocs(TransactionCase):
             self.assertIn("@scalar/api-reference", html)
             self.assertIn('id="api-reference"', html)
             self.assertIn('data-url="/api/openapi.json"', html)
+

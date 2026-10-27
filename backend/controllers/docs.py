@@ -8,16 +8,19 @@ class ApiDocsController(http.Controller):
 
     def _get_openapi_spec(self, base_url=None):
         """Menghasilkan spesifikasi OpenAPI 3.0.3 sesuai implementasi aktual endpoint LaundryFlow."""
+        default_vps_url = "http://117.53.47.93:8069"
         servers = []
         if base_url:
+            clean_url = base_url.rstrip("/")
+            if "localhost" not in clean_url and "127.0.0.1" not in clean_url:
+                servers.append({
+                    "url": clean_url,
+                    "description": "LaundryFlow VPS Server",
+                })
+        if not any(s["url"] == default_vps_url for s in servers):
             servers.append({
-                "url": base_url.rstrip("/"),
-                "description": "Active LaundryFlow Server",
-            })
-        if not any(s["url"] == "http://localhost:8069" for s in servers):
-            servers.append({
-                "url": "http://localhost:8069",
-                "description": "Local Development Server",
+                "url": default_vps_url,
+                "description": "LaundryFlow VPS Server",
             })
 
         return {
@@ -839,3 +842,4 @@ class ApiDocsController(http.Controller):
                 "Content-Type": "text/html; charset=utf-8",
             },
         )
+
