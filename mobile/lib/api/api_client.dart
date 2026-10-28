@@ -30,6 +30,11 @@ class ApiClient {
   }) =>
       _send('POST', path, body: body);
 
+  Future<Map<String, dynamic>> delete(
+    String path
+    ) => 
+      _send('DELETE', path);
+
   Uri _uri(String path, Map<String, String>? query) {
     if (baseUrl.isEmpty) {
       throw const ApiException('Alamat server (BASE_URL) belum diatur.');

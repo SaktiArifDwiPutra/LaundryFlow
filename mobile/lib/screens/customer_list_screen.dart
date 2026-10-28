@@ -16,6 +16,7 @@ class CustomerListScreen extends StatefulWidget {
 class _CustomerListScreenState extends State<CustomerListScreen> {
   final _search = TextEditingController();
   Future<List<Customer>>? _future;
+  bool _deleting = false;
 
   @override
   void dispose() {
@@ -45,6 +46,48 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('${created.name} ditambahkan')),
     );
+  }
+
+  Future<void> _deleteCustomer(Customer c) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus pelanggan?'),
+        content: Text(
+          '${c.name} akan dihapus dari server. '
+          'Kalau pelanggan ini sudah punya transaksi, datanya mungkin '
+          'hanya diarsipkan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deleting = true);
+    try {
+      await customerRepository.delete(c.id);
+      if (!mounted) return;
+      _runSearch();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${c.name} dihapus')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal menghapus: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
   }
 
   @override
@@ -129,6 +172,15 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                             ),
                             title: Text(c.name),
                             subtitle: Text(subtitle),
+                            trailing: widget.selectMode
+                                ? null
+                                : IconButton(
+                                    icon: const Icon(Icons.delete_outline),
+                                    tooltip: 'Hapus',
+                                    onPressed: _deleting
+                                        ? null
+                                        : () => _deleteCustomer(c),
+                                  ),
                             onTap: widget.selectMode
                                 ? () => Navigator.of(context).pop(c)
                                 : null,

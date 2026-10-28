@@ -20,7 +20,7 @@ final ApiClient apiClient = ApiClient(
 );
 
 /// Satu-satunya tempat memilih sumber data.
-/// USE_MOCK=false memakai backend untuk login dan cari pelanggan.
+/// USE_MOCK=false memakai backend untuk login dan pelanggan (cari + tambah).
 final AuthRepository authRepository =
     useMock ? MockAuthRepository() : OdooAuthRepository(apiClient);
 final CustomerRepository customerRepository =

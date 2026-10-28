@@ -47,4 +47,10 @@ class MockCustomerRepository implements CustomerRepository {
     _customers.add(customer);
     return customer;
   }
+
+  @override
+  Future<void> delete(int id) async {
+    await _fakeDelay();
+    _customers.removeWhere((c) => c.id == id);
+  }
 }

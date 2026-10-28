@@ -8,6 +8,8 @@ abstract class CustomerRepository {
     required String phone,
     String address = '',
   });
+  
+  Future<void> delete(int id);
 }
 
 class DuplicateCustomerException implements Exception {
