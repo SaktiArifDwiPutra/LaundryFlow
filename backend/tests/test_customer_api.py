@@ -1,5 +1,6 @@
 import json
 from unittest.mock import MagicMock, patch
+from odoo.exceptions import AccessError
 from odoo.tests.common import TransactionCase
 from ..controllers.main import CustomerApiController
 
@@ -30,6 +31,17 @@ class TestCustomerApi(TransactionCase):
         cls.partner_with_phone = cls.env['res.partner'].search([('phone', '!=', False)], limit=1)
         if not cls.partner_with_phone:
             cls.partner_with_phone = cls.env['res.partner'].search([], limit=1)
+
+        # Ensure test phone fixtures are isolated inside the rolled-back TransactionCase savepoint
+        test_phones = [
+            '08551234567', '+6281234567891', '+62 812-3456-7892', '6281234567893',
+            '+1 (415) 555-2671', '+44 20 7946 0958', '+65 9123 4567',
+            '081299887766', '+6281398765432', '081277665544', '081255443322',
+        ]
+        cls.env['res.partner'].search([
+            ('phone', 'in', test_phones),
+            ('id', '!=', cls.partner_with_phone.id),
+        ]).write({'active': False})
 
     def _mock_request(self, user=None, headers=None, params=None, method='GET', data=None):
         """Creates a mock odoo.http.request context."""
@@ -443,3 +455,86 @@ class TestCustomerApi(TransactionCase):
                 self.assertIs(dup_data.get('success'), False)
                 self.assertIn('Andi Pratama', dup_data.get('message', ''))
                 self.assertEqual(dup_data.get('data', {}).get('id'), created_customer['id'])
+
+    def test_23_create_customer_access_denied_forbidden(self):
+        """Test that an authenticated user without create permission on res.partner receives 403 Forbidden."""
+        payload = json.dumps({
+            'name': 'Pelanggan Tanpa Izin',
+            'phone': '081266554433',
+        }).encode('utf-8')
+        mock_req = self._mock_request(user=self.admin_user, method='POST', data=payload)
+        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req), \
+             patch.object(type(self.env['res.partner']), 'check_access', side_effect=AccessError('Denied')):
+            response = self.controller.create_customer()
+            self.assertEqual(response.status_code, 403)
+            data = json.loads(response.get_data(as_text=True))
+            self.assertIs(data.get('success'), False)
+            self.assertIn('izin', data.get('message', '').lower())
+
+    def test_24_create_customer_bearer_and_session_header_authentication(self):
+        """Test token-based authentication via Authorization Bearer header and invalid token rejection."""
+        payload = json.dumps({
+            'name': 'Pelanggan Token Valid',
+            'phone': '081255443322',
+        }).encode('utf-8')
+
+        # 1. Invalid Bearer token -> 401
+        mock_req_invalid = self._mock_request(
+            user=None,
+            headers={'Authorization': 'Bearer invalid_session_token'},
+            method='POST',
+            data=payload,
+        )
+        mock_store_empty = MagicMock()
+        mock_store_empty.get.return_value = None
+        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_invalid), \
+             patch('odoo.addons.laundryflow_backend.controllers.main.session_store', return_value=mock_store_empty):
+            resp_invalid = self.controller.create_customer()
+            self.assertEqual(resp_invalid.status_code, 401)
+            data_invalid = json.loads(resp_invalid.get_data(as_text=True))
+            self.assertIs(data_invalid.get('success'), False)
+
+        # 2. Valid Bearer token -> 201
+        mock_req_valid = self._mock_request(
+            user=None,
+            headers={'Authorization': 'Bearer valid_session_token'},
+            method='POST',
+            data=payload,
+        )
+        mock_store_valid = MagicMock()
+        mock_store_valid.get.return_value = {'uid': self.admin_user.id}
+        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_valid), \
+             patch('odoo.addons.laundryflow_backend.controllers.main.session_store', return_value=mock_store_valid):
+            resp_valid = self.controller.create_customer()
+            self.assertEqual(resp_valid.status_code, 201)
+            data_valid = json.loads(resp_valid.get_data(as_text=True))
+            self.assertIs(data_valid.get('success'), True)
+            self.assertEqual(data_valid.get('data', {}).get('name'), 'Pelanggan Token Valid')
+
+    def test_25_create_customer_response_format_and_options_cors(self):
+        """Test OPTIONS preflight, CORS headers, and consistent success/error JSON structure."""
+        # 1. OPTIONS preflight
+        mock_req_opt = self._mock_request(user=None, method='OPTIONS')
+        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_opt):
+            resp_opt = self.controller.create_customer()
+            self.assertEqual(resp_opt.status_code, 200)
+            self.assertEqual(resp_opt.headers.get('Access-Control-Allow-Origin'), '*')
+            self.assertIn('POST', resp_opt.headers.get('Access-Control-Allow-Methods', ''))
+            opt_body = json.loads(resp_opt.get_data(as_text=True))
+            self.assertEqual(opt_body.get('status'), 'ok')
+
+        # 2. Invalid email format -> 400 with consistent error structure
+        bad_email_payload = json.dumps({
+            'name': 'Pelanggan Email Salah',
+            'phone': '081244332211',
+            'email': 'bukan-format-email',
+        }).encode('utf-8')
+        mock_req_err = self._mock_request(user=self.admin_user, method='POST', data=bad_email_payload)
+        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_err):
+            resp_err = self.controller.create_customer()
+            self.assertEqual(resp_err.status_code, 400)
+            self.assertIn('application/json', resp_err.headers.get('Content-Type', ''))
+            err_body = json.loads(resp_err.get_data(as_text=True))
+            self.assertEqual(set(err_body.keys()), {'success', 'message'})
+            self.assertIs(err_body['success'], False)
+            self.assertIn('email', err_body['message'].lower())
