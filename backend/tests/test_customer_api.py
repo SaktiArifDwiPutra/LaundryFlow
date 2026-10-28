@@ -34,7 +34,6 @@ class TestCustomerApi(TransactionCase):
     def _mock_request(self, user=None, headers=None, params=None, method='GET', data=None):
         """Creates a mock odoo.http.request context."""
         mock_req = MagicMock()
-        mock_req.env = self.env
         mock_req.httprequest.method = method
         mock_req.httprequest.headers = headers or {}
         mock_req.httprequest.data = data if data is not None else b''
@@ -42,10 +41,10 @@ class TestCustomerApi(TransactionCase):
         mock_req.session = MagicMock()
         if user and not user._is_public():
             mock_req.session.uid = user.id
-            mock_req.env.user = user
+            mock_req.env = self.env(user=user)
         else:
             mock_req.session.uid = False
-            mock_req.env.user = self.public_user
+            mock_req.env = self.env(user=self.public_user)
 
         return mock_req
 
@@ -218,3 +217,100 @@ class TestCustomerApi(TransactionCase):
             self.assertEqual(customer.get('address'), 'Jl. Kenanga No. 5')
             self.assertEqual(customer.get('city'), 'Surabaya')
             self.assertEqual(customer.get('email'), 'pelanggan@test.com')
+
+    def test_13_create_customer_empty_or_whitespace_name(self):
+        """Test creating customer with empty or whitespace-only name returns 400."""
+        for invalid_name in ['', '   ', '\t\n']:
+            payload = json.dumps({'name': invalid_name, 'phone': '08123456789'}).encode('utf-8')
+            mock_req = self._mock_request(user=self.admin_user, method='POST', data=payload)
+            with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+                response = self.controller.create_customer()
+                self.assertEqual(response.status_code, 400)
+                data = json.loads(response.get_data(as_text=True))
+                self.assertIs(data.get('success'), False)
+                self.assertIn('name', data.get('message', ''))
+
+    def test_14_create_customer_empty_or_whitespace_phone(self):
+        """Test creating customer with empty or whitespace-only phone returns 400."""
+        for invalid_phone in ['', '   ', '\t\n']:
+            payload = json.dumps({'name': 'Budi Santoso', 'phone': invalid_phone}).encode('utf-8')
+            mock_req = self._mock_request(user=self.admin_user, method='POST', data=payload)
+            with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+                response = self.controller.create_customer()
+                self.assertEqual(response.status_code, 400)
+                data = json.loads(response.get_data(as_text=True))
+                self.assertIs(data.get('success'), False)
+                self.assertIn('phone', data.get('message', ''))
+
+    def test_15_create_customer_invalid_data_types(self):
+        """Test creating customer with non-string data types for name, phone, and optional fields returns 400."""
+        invalid_payloads = [
+            {'name': 12345, 'phone': '08123456789'},
+            {'name': ['Budi'], 'phone': '08123456789'},
+            {'name': True, 'phone': '08123456789'},
+            {'name': 'Budi Santoso', 'phone': 8123456789},
+            {'name': 'Budi Santoso', 'phone': ['08123456789']},
+            {'name': 'Budi Santoso', 'phone': True},
+            {'name': 'Budi Santoso', 'phone': {'number': '08123456789'}},
+            {'name': 'Budi Santoso', 'phone': '08123456789', 'street': 123},
+            {'name': 'Budi Santoso', 'phone': '08123456789', 'email': ['a@b.com']},
+            {'name': 'Budi Santoso', 'phone': '08123456789', 'city': {'name': 'Jakarta'}},
+        ]
+        for body in invalid_payloads:
+            payload = json.dumps(body).encode('utf-8')
+            mock_req = self._mock_request(user=self.admin_user, method='POST', data=payload)
+            with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+                response = self.controller.create_customer()
+                self.assertEqual(response.status_code, 400, f"Expected 400 for payload: {body}")
+                data = json.loads(response.get_data(as_text=True))
+                self.assertIs(data.get('success'), False)
+                self.assertTrue(isinstance(data.get('message'), str) and len(data['message']) > 0)
+
+    def test_16_create_customer_invalid_phone_formats(self):
+        """Test creating customer with invalid phone number formats returns 400."""
+        invalid_phones = [
+            'abc',
+            '0812abc3456',
+            '12345',                     # too short (< 8 digits)
+            '0812345',                   # too short (7 digits)
+            '081234567890123456',        # too long (> 15 digits)
+            '+08123456789',              # invalid international country code starting with 0
+            '++628123456789',            # double plus
+            '62+8123456789',             # plus in middle
+            '+62 (812 3456-7890',        # unbalanced parentheses
+            '+62 () 8123456789',         # empty parentheses
+            '0812@3456#789',             # invalid symbols
+            '0000000000',                # all zeros
+        ]
+        for bad_phone in invalid_phones:
+            payload = json.dumps({'name': 'Budi Santoso', 'phone': bad_phone}).encode('utf-8')
+            mock_req = self._mock_request(user=self.admin_user, method='POST', data=payload)
+            with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+                response = self.controller.create_customer()
+                self.assertEqual(response.status_code, 400, f"Expected 400 for invalid phone: {bad_phone}")
+                data = json.loads(response.get_data(as_text=True))
+                self.assertIs(data.get('success'), False)
+                self.assertTrue(isinstance(data.get('message'), str) and len(data['message']) > 0)
+
+    def test_17_create_customer_valid_international_phone_formats(self):
+        """Test creating customer with valid international and local phone formats returns 201."""
+        valid_phones = [
+            '+6281234567890',
+            '+62 812-3456-7890',
+            '6281234567890',
+            '+1 (415) 555-2671',
+            '+44 20 7946 0958',
+            '+65 9123 4567',
+        ]
+        for valid_phone in valid_phones:
+            payload = json.dumps({
+                'name': 'Pelanggan Internasional',
+                'phone': valid_phone,
+            }).encode('utf-8')
+            mock_req = self._mock_request(user=self.admin_user, method='POST', data=payload)
+            with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+                response = self.controller.create_customer()
+                self.assertEqual(response.status_code, 201, f"Expected 201 for valid phone: {valid_phone}")
+                data = json.loads(response.get_data(as_text=True))
+                self.assertIs(data.get('success'), True)
+                self.assertEqual(data.get('data', {}).get('phone'), valid_phone)

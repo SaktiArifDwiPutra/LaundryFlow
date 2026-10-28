@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from odoo import http
 from odoo.http import request, Response
 from odoo.http.session import session_store, authenticate, save_session
@@ -242,6 +243,42 @@ class CustomerApiController(http.Controller):
                 'message': 'Terjadi kesalahan internal pada server'
             }, status=500)
 
+    def _validate_phone(self, phone):
+        """
+        Validates phone number data type and format.
+        Supports local formats (e.g. 08123456789, 021-5551234) and valid international
+        formats (e.g. +628123456789, +62 812-3456-7890, +1 (415) 555-2671, +6591234567).
+        Returns tuple (is_valid, cleaned_phone_or_error_message).
+        """
+        if phone is None:
+            return False, 'Field phone wajib diisi'
+        if not isinstance(phone, str):
+            return False, 'Field phone harus berupa string yang valid'
+
+        cleaned = phone.strip()
+        if not cleaned:
+            return False, 'Field phone wajib diisi dan tidak boleh kosong'
+
+        if not re.fullmatch(r'^\+?[0-9][0-9\s\-\(\)]*[0-9]$', cleaned):
+            return False, 'Format nomor telepon tidak valid'
+
+        if cleaned.count('(') != cleaned.count(')') or '()' in cleaned:
+            return False, 'Format nomor telepon tidak valid'
+
+        if cleaned.startswith('+'):
+            rest = cleaned[1:].lstrip()
+            if not rest or rest[0] == '0':
+                return False, 'Format nomor telepon internasional tidak valid'
+
+        digits = re.sub(r'\D', '', cleaned)
+        if len(digits) < 8 or len(digits) > 15:
+            return False, 'Nomor telepon harus terdiri dari 8 hingga 15 digit angka'
+
+        if set(digits) == {'0'}:
+            return False, 'Format nomor telepon tidak valid'
+
+        return True, cleaned
+
     # Endpoint Penambahan Pelanggan Baru LaundryFlow
     @http.route(
         ['/api/laundry/customers', '/api/customers', '/api/laundry/customers/create', '/api/customers/create'],
@@ -296,22 +333,41 @@ class CustomerApiController(http.Controller):
 
             # 4. Validasi Field Wajib (Name & Phone)
             name = body.get('name')
-            if not name or not isinstance(name, str) or not name.strip():
+            if name is None:
                 return self._json_response({
                     'success': False,
                     'message': 'Field name wajib diisi'
                 }, status=400)
-            name = name.strip()
-
-            phone = body.get('phone')
-            if not phone or not isinstance(phone, str) or not phone.strip():
+            if not isinstance(name, str):
                 return self._json_response({
                     'success': False,
-                    'message': 'Field phone wajib diisi'
+                    'message': 'Field name harus berupa string yang valid'
                 }, status=400)
-            phone = phone.strip()
+            if not name.strip():
+                return self._json_response({
+                    'success': False,
+                    'message': 'Field name wajib diisi dan tidak boleh hanya berisi spasi'
+                }, status=400)
+            name = name.strip()
 
-            # 5. Ekstraksi Field Opsional
+            phone_raw = body.get('phone')
+            is_valid_phone, phone_or_err = self._validate_phone(phone_raw)
+            if not is_valid_phone:
+                return self._json_response({
+                    'success': False,
+                    'message': phone_or_err
+                }, status=400)
+            phone = phone_or_err
+
+            # 5. Validasi dan Ekstraksi Field Opsional
+            for opt_field in ('street', 'address', 'email', 'city'):
+                opt_val = body.get(opt_field)
+                if opt_val is not None and not isinstance(opt_val, str):
+                    return self._json_response({
+                        'success': False,
+                        'message': f'Field {opt_field} harus berupa string yang valid'
+                    }, status=400)
+
             street = body.get('street') or body.get('address') or ''
             street = street.strip() if isinstance(street, str) else ''
 
