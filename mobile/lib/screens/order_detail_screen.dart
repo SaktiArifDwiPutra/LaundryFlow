@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import '../widgets/invoice_section.dart';
 import '../models/order.dart';
 import '../models/order_status.dart';
 import '../repositories/order_repository.dart';
@@ -78,9 +78,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   StatusChip(status: order.status),
                 ],
               ),
-              const SizedBox(height: 16),
-              Text(order.customer.name, style: textTheme.titleMedium),
-              Text(order.customer.phone),
+              const SizedBox(height: 24),
+              InvoiceSection(
+                key: ValueKey('${order.id}-${order.status.code}'),
+                orderId: order.id,
+              ),
+              const SizedBox(height: 24),
               const Divider(height: 32),
               for (final line in order.lines)
                 ListTile(

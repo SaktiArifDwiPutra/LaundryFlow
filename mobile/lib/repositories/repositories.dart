@@ -3,8 +3,10 @@ import '../config.dart';
 import '../session.dart';
 import 'auth_repository.dart';
 import 'customer_repository.dart';
+import 'invoice_repository.dart';
 import 'mock_auth_repository.dart';
 import 'mock_customer_repository.dart';
+import 'mock_invoice_repository.dart';
 import 'mock_order_repository.dart';
 import 'mock_service_repository.dart';
 import 'odoo_auth_repository.dart';
@@ -24,6 +26,8 @@ final AuthRepository authRepository =
 final CustomerRepository customerRepository =
     useMock ? MockCustomerRepository() : OdooCustomerRepository(apiClient);
 
-// Endpoint pesanan dan layanan belum ada di backend, jadi tetap mock.
+// Endpoint pesanan, layanan, dan invoice belum ada di backend, jadi tetap mock.
 final OrderRepository orderRepository = MockOrderRepository();
 final ServiceRepository serviceRepository = MockServiceRepository();
+final InvoiceRepository invoiceRepository =
+    MockInvoiceRepository(orderRepository);
