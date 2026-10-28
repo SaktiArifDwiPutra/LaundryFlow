@@ -219,13 +219,13 @@ class TestCustomerApi(TransactionCase):
             self.assertEqual(customer.get('email'), 'pelanggan@test.com')
 
     def test_13_create_customer_empty_or_whitespace_name(self):
-        """Test creating customer with empty or whitespace-only name returns 400."""
-        for invalid_name in ['', '   ', '\t\n']:
+        """Test creating customer with empty, whitespace-only, or numeric name returns 400."""
+        for invalid_name in ['', '   ', '\t\n', '989', '12345', 'Budi 123', '@@@']:
             payload = json.dumps({'name': invalid_name, 'phone': '08123456789'}).encode('utf-8')
             mock_req = self._mock_request(user=self.admin_user, method='POST', data=payload)
             with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
                 response = self.controller.create_customer()
-                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.status_code, 400, f"Expected 400 for invalid name: {invalid_name}")
                 data = json.loads(response.get_data(as_text=True))
                 self.assertIs(data.get('success'), False)
                 self.assertIn('name', data.get('message', ''))
@@ -281,6 +281,8 @@ class TestCustomerApi(TransactionCase):
             '+62 () 8123456789',         # empty parentheses
             '0812@3456#789',             # invalid symbols
             '0000000000',                # all zeros
+            '90890809',                  # missing valid prefix (0, 62, or +)
+            '1234567890',                # missing valid prefix
         ]
         for bad_phone in invalid_phones:
             payload = json.dumps({'name': 'Budi Santoso', 'phone': bad_phone}).encode('utf-8')

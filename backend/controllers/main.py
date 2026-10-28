@@ -243,11 +243,34 @@ class CustomerApiController(http.Controller):
                 'message': 'Terjadi kesalahan internal pada server'
             }, status=500)
 
+    def _validate_name(self, name):
+        """
+        Validates customer name data type and format.
+        Must be a non-empty string containing valid alphabetic characters (no numbers).
+        Returns tuple (is_valid, cleaned_name_or_error_message).
+        """
+        if name is None:
+            return False, 'Field name wajib diisi'
+        if not isinstance(name, str):
+            return False, 'Field name harus berupa string yang valid'
+
+        cleaned = name.strip()
+        if not cleaned:
+            return False, 'Field name wajib diisi dan tidak boleh hanya berisi spasi'
+
+        if re.search(r'\d', cleaned):
+            return False, 'Field name tidak boleh mengandung angka'
+
+        if not re.fullmatch(r"^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s\.\'\-]*$", cleaned):
+            return False, 'Field name hanya boleh berisi huruf dan karakter nama yang valid'
+
+        return True, cleaned
+
     def _validate_phone(self, phone):
         """
         Validates phone number data type and format.
         Supports local formats (e.g. 08123456789, 021-5551234) and valid international
-        formats (e.g. +628123456789, +62 812-3456-7890, +1 (415) 555-2671, +6591234567).
+        formats (e.g. +628123456789, +62 812-3456-7890, 628123456789, +1 (415) 555-2671, +6591234567).
         Returns tuple (is_valid, cleaned_phone_or_error_message).
         """
         if phone is None:
@@ -265,17 +288,25 @@ class CustomerApiController(http.Controller):
         if cleaned.count('(') != cleaned.count(')') or '()' in cleaned:
             return False, 'Format nomor telepon tidak valid'
 
+        digits = re.sub(r'\D', '', cleaned)
+        if len(digits) < 9 or len(digits) > 15:
+            return False, 'Nomor telepon harus terdiri dari 9 hingga 15 digit angka'
+
+        if set(digits) == {'0'}:
+            return False, 'Format nomor telepon tidak valid'
+
         if cleaned.startswith('+'):
             rest = cleaned[1:].lstrip()
             if not rest or rest[0] == '0':
                 return False, 'Format nomor telepon internasional tidak valid'
-
-        digits = re.sub(r'\D', '', cleaned)
-        if len(digits) < 8 or len(digits) > 15:
-            return False, 'Nomor telepon harus terdiri dari 8 hingga 15 digit angka'
-
-        if set(digits) == {'0'}:
-            return False, 'Format nomor telepon tidak valid'
+        elif cleaned.startswith('0'):
+            if len(digits) < 9 or digits[1] == '0':
+                return False, 'Format nomor telepon lokal tidak valid'
+        elif cleaned.startswith('62'):
+            if len(digits) < 10 or digits[2] == '0':
+                return False, 'Format nomor telepon tidak valid'
+        else:
+            return False, 'Nomor telepon harus diawali dengan 0, 62, atau kode negara internasional (+)'
 
         return True, cleaned
 
@@ -332,23 +363,14 @@ class CustomerApiController(http.Controller):
                 }, status=400)
 
             # 4. Validasi Field Wajib (Name & Phone)
-            name = body.get('name')
-            if name is None:
+            name_raw = body.get('name')
+            is_valid_name, name_or_err = self._validate_name(name_raw)
+            if not is_valid_name:
                 return self._json_response({
                     'success': False,
-                    'message': 'Field name wajib diisi'
+                    'message': name_or_err
                 }, status=400)
-            if not isinstance(name, str):
-                return self._json_response({
-                    'success': False,
-                    'message': 'Field name harus berupa string yang valid'
-                }, status=400)
-            if not name.strip():
-                return self._json_response({
-                    'success': False,
-                    'message': 'Field name wajib diisi dan tidak boleh hanya berisi spasi'
-                }, status=400)
-            name = name.strip()
+            name = name_or_err
 
             phone_raw = body.get('phone')
             is_valid_phone, phone_or_err = self._validate_phone(phone_raw)
