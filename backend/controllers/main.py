@@ -16,7 +16,7 @@ class CustomerApiController(http.Controller):
         headers = {
             'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, X-Session-Id, X-Api-Key',
         }
         return Response(
@@ -230,6 +230,14 @@ class CustomerApiController(http.Controller):
                 for p in partners
             ]
 
+            if not data:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Data pelanggan tidak ditemukan',
+                    'count': 0,
+                    'data': []
+                }, status=404)
+
             return self._json_response({
                 'success': True,
                 'count': len(data),
@@ -431,6 +439,90 @@ class CustomerApiController(http.Controller):
 
         except Exception as e:
             _logger.exception("Error creating customer: %s", str(e))
+            return self._json_response({
+                'success': False,
+                'message': 'Terjadi kesalahan internal pada server'
+            }, status=500)
+
+    # Endpoint Penghapusan Pelanggan LaundryFlow
+    @http.route(
+        [
+            '/api/laundry/customers/<string:customer_id>',
+            '/api/customers/<string:customer_id>',
+            '/api/laundry/customers/delete/<string:customer_id>',
+            '/api/customers/delete/<string:customer_id>',
+        ],
+        type='http',
+        auth='public',
+        methods=['DELETE', 'OPTIONS'],
+        csrf=False
+    )
+    def delete_customer(self, customer_id=None, **kwargs):
+        if request.httprequest.method == 'OPTIONS':
+            return self._json_response({'status': 'ok'})
+
+        try:
+            # 1. Autentikasi Pengguna
+            user = self._get_authenticated_user()
+            if not user:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Autentikasi diperlukan. Akses tidak diizinkan.'
+                }, status=401)
+
+            # 2. Hak Akses (Authorization)
+            try:
+                request.env['res.partner'].with_user(user).check_access('unlink')
+            except AccessError:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Akses ditolak: Anda tidak memiliki izin untuk menghapus data pelanggan.'
+                }, status=403)
+
+            # 3. Validasi Parameter ID Pelanggan
+            try:
+                cid = int(str(customer_id).strip())
+                if cid <= 0:
+                    raise ValueError
+            except (ValueError, TypeError):
+                return self._json_response({
+                    'success': False,
+                    'message': 'ID pelanggan harus berupa angka positif yang valid'
+                }, status=400)
+
+            # 4. Cari Pelanggan Aktif
+            partner = request.env['res.partner'].with_user(user).search([
+                ('id', '=', cid),
+                ('active', '=', True),
+            ], limit=1)
+
+            if not partner:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Data pelanggan tidak ditemukan'
+                }, status=404)
+
+            partner_info = {
+                'id': partner.id,
+                'name': partner.name or '',
+                'phone': partner.phone or '',
+            }
+
+            # 5. Hapus Record Pelanggan (atau arsipkan jika terkait transaksi/referensi lain)
+            try:
+                with request.env.cr.savepoint():
+                    partner.unlink()
+            except Exception:
+                partner.write({'active': False})
+
+            return self._json_response({
+                'success': True,
+                'message': 'Pelanggan berhasil dihapus',
+                'data': partner_info,
+            }, status=200)
+
+        except Exception as e:
+            _logger.exception("Error deleting customer: %s", str(e))
             return self._json_response({
                 'success': False,
                 'message': 'Terjadi kesalahan internal pada server'

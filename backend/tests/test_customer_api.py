@@ -127,13 +127,14 @@ class TestCustomerApi(TransactionCase):
                 self.assertGreaterEqual(data.get('count', 0), 1)
 
     def test_07_customer_search_empty_result(self):
-        """Test search query with no matching customer returns empty list."""
+        """Test search query with no matching customer returns 404 and success=False."""
         mock_req = self._mock_request(user=self.admin_user)
         with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
             response = self.controller.search_customers(q="XYZ_NON_EXISTENT_NAME_99999")
-            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.status_code, 404)
             data = json.loads(response.get_data(as_text=True))
-            self.assertTrue(data.get('success'))
+            self.assertFalse(data.get('success'))
+            self.assertIn("tidak ditemukan", data.get('message', '').lower())
             self.assertEqual(data.get('count'), 0)
             self.assertEqual(data.get('data'), [])
 
@@ -316,3 +317,50 @@ class TestCustomerApi(TransactionCase):
                 data = json.loads(response.get_data(as_text=True))
                 self.assertIs(data.get('success'), True)
                 self.assertEqual(data.get('data', {}).get('phone'), valid_phone)
+
+    def test_18_delete_customer_unauthorized(self):
+        """Test that unauthenticated request to delete customer returns 401."""
+        mock_req = self._mock_request(user=None, method='DELETE')
+        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+            response = self.controller.delete_customer(customer_id="1")
+            self.assertEqual(response.status_code, 401)
+            data = json.loads(response.get_data(as_text=True))
+            self.assertIs(data.get('success'), False)
+
+    def test_19_delete_customer_invalid_or_not_found(self):
+        """Test deleting customer with invalid ID returns 400 and non-existent ID returns 404."""
+        for bad_id in ["abc", "-5", "0"]:
+            mock_req = self._mock_request(user=self.admin_user, method='DELETE')
+            with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+                response = self.controller.delete_customer(customer_id=bad_id)
+                self.assertEqual(response.status_code, 400)
+                data = json.loads(response.get_data(as_text=True))
+                self.assertIs(data.get('success'), False)
+
+        mock_req = self._mock_request(user=self.admin_user, method='DELETE')
+        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+            response = self.controller.delete_customer(customer_id="99999999")
+            self.assertEqual(response.status_code, 404)
+            data = json.loads(response.get_data(as_text=True))
+            self.assertIs(data.get('success'), False)
+            self.assertIn("tidak ditemukan", data.get('message', '').lower())
+
+    def test_20_delete_customer_success(self):
+        """Test creating and then deleting a customer returns 200 and removes customer."""
+        payload = json.dumps({
+            'name': 'Pelanggan Hapus',
+            'phone': '081299887766',
+        }).encode('utf-8')
+        mock_req_create = self._mock_request(user=self.admin_user, method='POST', data=payload)
+        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_create):
+            create_resp = self.controller.create_customer()
+            self.assertEqual(create_resp.status_code, 201)
+            created_id = json.loads(create_resp.get_data(as_text=True))['data']['id']
+
+        mock_req_del = self._mock_request(user=self.admin_user, method='DELETE')
+        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_del):
+            del_resp = self.controller.delete_customer(customer_id=str(created_id))
+            self.assertEqual(del_resp.status_code, 200)
+            del_data = json.loads(del_resp.get_data(as_text=True))
+            self.assertIs(del_data.get('success'), True)
+            self.assertEqual(del_data.get('data', {}).get('id'), created_id)

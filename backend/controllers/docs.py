@@ -260,14 +260,6 @@ class ApiDocsController(http.Controller):
                                                     ],
                                                 },
                                             },
-                                            "empty": {
-                                                "summary": "Tidak ada pelanggan yang cocok",
-                                                "value": {
-                                                    "success": True,
-                                                    "count": 0,
-                                                    "data": [],
-                                                },
-                                            },
                                         },
                                     }
                                 },
@@ -329,6 +321,22 @@ class ApiDocsController(http.Controller):
                                         "example": {
                                             "success": False,
                                             "message": "Akses ditolak: Anda tidak memiliki izin untuk melihat data pelanggan.",
+                                        },
+                                    }
+                                },
+                            },
+                            "404": {
+                                "description": "Data pelanggan yang dicari tidak ditemukan.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "$ref": "#/components/schemas/ErrorResponse",
+                                        },
+                                        "example": {
+                                            "success": False,
+                                            "message": "Data pelanggan tidak ditemukan",
+                                            "count": 0,
+                                            "data": [],
                                         },
                                     }
                                 },
@@ -486,6 +494,145 @@ class ApiDocsController(http.Controller):
                                         "example": {
                                             "success": False,
                                             "message": "Akses ditolak: Anda tidak memiliki izin untuk membuat data pelanggan.",
+                                        },
+                                    }
+                                },
+                            },
+                            "500": {
+                                "description": "Kesalahan internal pada server.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "$ref": "#/components/schemas/ErrorResponse",
+                                        },
+                                        "example": {
+                                            "success": False,
+                                            "message": "Terjadi kesalahan internal pada server",
+                                        },
+                                    }
+                                },
+                            },
+                        },
+                    }
+                },
+                "/api/laundry/customers/{customer_id}": {
+                    "delete": {
+                        "tags": ["Customers"],
+                        "summary": "Hapus Pelanggan (Customer Deletion)",
+                        "operationId": "deleteCustomer",
+                        "description": (
+                            "Menghapus data pelanggan (`res.partner`) berdasarkan `customer_id`.\n\n"
+                            "Jika pelanggan memiliki relasi transaksi/data lain yang mencegah penghapusan permanen, "
+                            "record pelanggan akan diarsipkan (`active = False`) sehingga tidak lagi muncul di daftar aktif.\n\n"
+                            "**Route Alias yang Didukung:**\n"
+                            "- `DELETE /api/laundry/customers/{customer_id}`\n"
+                            "- `DELETE /api/customers/{customer_id}`\n"
+                            "- `DELETE /api/laundry/customers/delete/{customer_id}`\n"
+                            "- `DELETE /api/customers/delete/{customer_id}`"
+                        ),
+                        "security": [
+                            {"BearerAuth": []},
+                            {"SessionHeaderAuth": []},
+                            {"ApiKeyHeaderAuth": []},
+                        ],
+                        "parameters": [
+                            {
+                                "name": "customer_id",
+                                "in": "path",
+                                "required": True,
+                                "description": "ID unik pelanggan (`res.partner`) yang akan dihapus.",
+                                "schema": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                },
+                                "example": 21,
+                            }
+                        ],
+                        "responses": {
+                            "200": {
+                                "description": "Pelanggan berhasil dihapus.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "required": ["success", "message", "data"],
+                                            "properties": {
+                                                "success": {"type": "boolean", "example": True},
+                                                "message": {"type": "string", "example": "Pelanggan berhasil dihapus"},
+                                                "data": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "id": {"type": "integer", "example": 21},
+                                                        "name": {"type": "string", "example": "Test Pelanggan"},
+                                                        "phone": {"type": "string", "example": "08551234567"},
+                                                    },
+                                                },
+                                            },
+                                        },
+                                        "example": {
+                                            "success": True,
+                                            "message": "Pelanggan berhasil dihapus",
+                                            "data": {
+                                                "id": 21,
+                                                "name": "Test Pelanggan",
+                                                "phone": "08551234567",
+                                            },
+                                        },
+                                    }
+                                },
+                            },
+                            "400": {
+                                "description": "Parameter `customer_id` bukan angka positif yang valid.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "$ref": "#/components/schemas/ErrorResponse",
+                                        },
+                                        "example": {
+                                            "success": False,
+                                            "message": "ID pelanggan harus berupa angka positif yang valid",
+                                        },
+                                    }
+                                },
+                            },
+                            "401": {
+                                "description": "Permintaan belum terautentikasi atau token tidak valid.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "$ref": "#/components/schemas/ErrorResponse",
+                                        },
+                                        "example": {
+                                            "success": False,
+                                            "message": "Autentikasi diperlukan. Akses tidak diizinkan.",
+                                        },
+                                    }
+                                },
+                            },
+                            "403": {
+                                "description": "Pengguna tidak memiliki hak akses hapus (`unlink`) pada `res.partner`.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "$ref": "#/components/schemas/ErrorResponse",
+                                        },
+                                        "example": {
+                                            "success": False,
+                                            "message": "Akses ditolak: Anda tidak memiliki izin untuk menghapus data pelanggan.",
+                                        },
+                                    }
+                                },
+                            },
+                            "404": {
+                                "description": "Data pelanggan dengan ID tersebut tidak ditemukan.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "$ref": "#/components/schemas/ErrorResponse",
+                                        },
+                                        "example": {
+                                            "success": False,
+                                            "message": "Data pelanggan tidak ditemukan",
                                         },
                                     }
                                 },
