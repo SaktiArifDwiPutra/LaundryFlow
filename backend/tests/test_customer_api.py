@@ -196,7 +196,7 @@ class TestCustomerApi(TransactionCase):
             self.assertFalse(data.get('success'))
 
     def test_12_create_customer_success(self):
-        """Test creating customer with valid data returns 201 and created partner data."""
+        """Test creating customer with valid data persists via Odoo ORM and returns safe partner data."""
         payload = json.dumps({
             'name': 'Test Pelanggan',
             'phone': '08551234567',
@@ -218,6 +218,25 @@ class TestCustomerApi(TransactionCase):
             self.assertEqual(customer.get('address'), 'Jl. Kenanga No. 5')
             self.assertEqual(customer.get('city'), 'Surabaya')
             self.assertEqual(customer.get('email'), 'pelanggan@test.com')
+
+            # Verify safe fields only (no internal / sensitive data leakage)
+            allowed_fields = {'id', 'name', 'phone', 'email', 'street', 'city', 'address'}
+            self.assertTrue(allowed_fields.issuperset(customer.keys()))
+            self.assertNotIn('password', customer)
+            self.assertNotIn('credit', customer)
+            self.assertNotIn('comment', customer)
+            self.assertNotIn('invoice_ids', customer)
+
+            # Verify record persistence in res.partner via Odoo ORM
+            partner_rec = self.env['res.partner'].browse(customer['id'])
+            self.assertTrue(partner_rec.exists())
+            self.assertEqual(partner_rec.name, 'Test Pelanggan')
+            self.assertEqual(partner_rec.phone, '08551234567')
+            self.assertEqual(partner_rec.email, 'pelanggan@test.com')
+            self.assertEqual(partner_rec.street, 'Jl. Kenanga No. 5')
+            self.assertEqual(partner_rec.city, 'Surabaya')
+            self.assertTrue(partner_rec.active)
+            self.assertFalse(partner_rec.is_company)
 
     def test_13_create_customer_empty_or_whitespace_name(self):
         """Test creating customer with empty, whitespace-only, or numeric name returns 400."""
@@ -364,3 +383,26 @@ class TestCustomerApi(TransactionCase):
             del_data = json.loads(del_resp.get_data(as_text=True))
             self.assertIs(del_data.get('success'), True)
             self.assertEqual(del_data.get('data', {}).get('id'), created_id)
+
+    def test_21_create_customer_minimal_valid_data_orm_persistence(self):
+        """Test creating customer with minimal required fields (name & phone) saves via ORM and returns safe fields."""
+        payload = json.dumps({
+            'name': '  Siti Aminah  ',
+            'phone': '  +6281398765432  ',
+        }).encode('utf-8')
+        mock_req = self._mock_request(user=self.admin_user, method='POST', data=payload)
+        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+            response = self.controller.create_customer()
+            self.assertEqual(response.status_code, 201)
+            body = json.loads(response.get_data(as_text=True))
+            self.assertIs(body.get('success'), True)
+
+            customer = body.get('data', {})
+            self.assertIsInstance(customer.get('id'), int)
+            self.assertEqual(customer.get('name'), 'Siti Aminah')
+            self.assertEqual(customer.get('phone'), '+6281398765432')
+
+            partner_rec = self.env['res.partner'].browse(customer['id'])
+            self.assertTrue(partner_rec.exists())
+            self.assertEqual(partner_rec.name, 'Siti Aminah')
+            self.assertEqual(partner_rec.phone, '+6281398765432')

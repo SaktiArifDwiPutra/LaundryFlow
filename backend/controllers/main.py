@@ -390,7 +390,7 @@ class CustomerApiController(http.Controller):
             phone = phone_or_err
 
             # 5. Validasi dan Ekstraksi Field Opsional
-            for opt_field in ('street', 'address', 'email', 'city'):
+            for opt_field in ('street', 'address', 'email', 'city', 'mobile'):
                 opt_val = body.get(opt_field)
                 if opt_val is not None and not isinstance(opt_val, str):
                     return self._json_response({
@@ -403,38 +403,61 @@ class CustomerApiController(http.Controller):
 
             email = body.get('email') or ''
             email = email.strip() if isinstance(email, str) else ''
+            if email and not re.fullmatch(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+                return self._json_response({
+                    'success': False,
+                    'message': 'Format email tidak valid'
+                }, status=400)
 
             city = body.get('city') or ''
             city = city.strip() if isinstance(city, str) else ''
 
-            # 6. Pembuatan Record Pelanggan via ORM Odoo
+            mobile = body.get('mobile') or ''
+            mobile = mobile.strip() if isinstance(mobile, str) else ''
+            if mobile:
+                is_valid_mobile, mobile_or_err = self._validate_phone(mobile)
+                if not is_valid_mobile:
+                    return self._json_response({
+                        'success': False,
+                        'message': mobile_or_err
+                    }, status=400)
+                mobile = mobile_or_err
+
+            # 6. Pembuatan Record Pelanggan via ORM Odoo (res.partner)
+            Partner = request.env['res.partner'].with_user(user)
             vals = {
                 'name': name,
                 'phone': phone,
-                'customer_rank': 1,
+                'active': True,
+                'is_company': False,
             }
+            if 'customer_rank' in Partner._fields:
+                vals['customer_rank'] = 1
             if street:
                 vals['street'] = street
             if email:
                 vals['email'] = email
             if city:
                 vals['city'] = city
+            if mobile and 'mobile' in Partner._fields:
+                vals['mobile'] = mobile
 
-            new_partner = request.env['res.partner'].with_user(user).create(vals)
+            new_partner = Partner.create(vals)
 
-            # 7. Format data hasil respon
+            # 7. Format data hasil respon (hanya field aman untuk ditampilkan)
+            response_data = {
+                'id': new_partner.id,
+                'name': new_partner.name or '',
+                'phone': new_partner.phone or '',
+                'email': new_partner.email or '',
+                'street': new_partner.street or '',
+                'city': new_partner.city or '',
+                'address': new_partner.street or '',
+            }
             return self._json_response({
                 'success': True,
                 'message': 'Pelanggan berhasil ditambahkan',
-                'data': {
-                    'id': new_partner.id,
-                    'name': new_partner.name or '',
-                    'phone': new_partner.phone or '',
-                    'email': new_partner.email or '',
-                    'street': new_partner.street or '',
-                    'city': new_partner.city or '',
-                    'address': new_partner.street or '',
-                }
+                'data': response_data
             }, status=201)
 
         except Exception as e:
