@@ -11,7 +11,6 @@ class AuthUser {
   final String username;
   final String sessionId;
 
-  /// Dari isi `data` pada respons login backend.
   factory AuthUser.fromJson(Map<String, dynamic> json) {
     return AuthUser(
       uid: json['uid'] as int,

@@ -30,6 +30,29 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final next = order.status.next;
     if (next == null) return;
 
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Ubah status ke "${next.label}"?'),
+        content: Text(
+          next == OrderStatus.ready
+              ? 'Pelanggan akan diberi tahu lewat WhatsApp bahwa laundrynya siap diambil. Pesan yang sudah terkirim tidak bisa ditarik.'
+              : 'Status pesanan ${order.number} akan diubah dari "${order.status.label}" ke "${next.label}".',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Ya, ubah'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
     setState(() => _saving = true);
     try {
       final updated = await orderRepository.advanceStatus(order.id, next);
