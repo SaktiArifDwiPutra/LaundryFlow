@@ -317,9 +317,9 @@ class TestCustomerApi(TransactionCase):
     def test_17_create_customer_valid_international_phone_formats(self):
         """Test creating customer with valid international and local phone formats returns 201."""
         valid_phones = [
-            '+6281234567890',
-            '+62 812-3456-7890',
-            '6281234567890',
+            '+6281234567891',
+            '+62 812-3456-7892',
+            '6281234567893',
             '+1 (415) 555-2671',
             '+44 20 7946 0958',
             '+65 9123 4567',
@@ -406,3 +406,40 @@ class TestCustomerApi(TransactionCase):
             self.assertTrue(partner_rec.exists())
             self.assertEqual(partner_rec.name, 'Siti Aminah')
             self.assertEqual(partner_rec.phone, '+6281398765432')
+
+    def test_22_create_customer_duplicate_and_phone_format_variations(self):
+        """Test duplicate customer detection for exact phone match and format variations (08..., 628..., +628...)."""
+        # 1. Create initial new customer in local format
+        initial_payload = json.dumps({
+            'name': 'Andi Pratama',
+            'phone': '081277665544',
+        }).encode('utf-8')
+        mock_req = self._mock_request(user=self.admin_user, method='POST', data=initial_payload)
+        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+            resp = self.controller.create_customer()
+            self.assertEqual(resp.status_code, 201)
+            created_customer = json.loads(resp.get_data(as_text=True))['data']
+
+        # 2. Attempt creating duplicate customer with exact same phone and various equivalent formats
+        duplicate_variations = [
+            '081277665544',
+            '0812-7766-5544',
+            '0812 7766 5544',
+            '6281277665544',
+            '+6281277665544',
+            '+62 812-7766-5544',
+            '+62 (812) 7766-5544',
+        ]
+        for dup_phone in duplicate_variations:
+            dup_payload = json.dumps({
+                'name': 'Pelanggan Duplikat',
+                'phone': dup_phone,
+            }).encode('utf-8')
+            mock_req_dup = self._mock_request(user=self.admin_user, method='POST', data=dup_payload)
+            with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_dup):
+                dup_resp = self.controller.create_customer()
+                self.assertEqual(dup_resp.status_code, 409, f"Expected 409 Conflict for duplicate phone: {dup_phone}")
+                dup_data = json.loads(dup_resp.get_data(as_text=True))
+                self.assertIs(dup_data.get('success'), False)
+                self.assertIn('Andi Pratama', dup_data.get('message', ''))
+                self.assertEqual(dup_data.get('data', {}).get('id'), created_customer['id'])

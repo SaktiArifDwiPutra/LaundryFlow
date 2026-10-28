@@ -318,6 +318,51 @@ class CustomerApiController(http.Controller):
 
         return True, cleaned
 
+    def _normalize_phone(self, phone):
+        """
+        Normalizes a phone number string for duplicate comparison without altering stored records.
+        - Removes spaces, hyphens, parentheses, and non-digit characters.
+        - Converts Indonesian local prefix '0...' to '62...' so '0812...', '62812...',
+          '+62812...', and '+62 812-...' normalize to the same canonical value.
+        - Preserves international country code for non-Indonesian numbers (e.g. '+1-415-555-2671' -> '+14155552671').
+        """
+        if not phone or not isinstance(phone, str):
+            return ''
+        cleaned = phone.strip()
+        digits = re.sub(r'\D', '', cleaned)
+        if not digits:
+            return ''
+        if cleaned.startswith('+'):
+            if digits.startswith('62'):
+                return digits
+            return f'+{digits}'
+        if digits.startswith('0'):
+            return f'62{digits[1:]}'
+        if digits.startswith('62'):
+            return digits
+        return digits
+
+    def _find_duplicate_customer(self, user, phone):
+        """
+        Checks if an active partner already uses the same normalized phone number.
+        Does not modify existing records or enforce global DB constraints on old records.
+        """
+        target_norm = self._normalize_phone(phone)
+        if not target_norm:
+            return None
+
+        Partner = request.env['res.partner'].with_user(user)
+        candidates = Partner.search_read(
+            domain=[('active', '=', True), ('phone', '!=', False)],
+            fields=['id', 'name', 'phone', 'email', 'street', 'city'],
+            order='id asc',
+        )
+        for partner in candidates:
+            existing_phone = partner.get('phone') or ''
+            if self._normalize_phone(existing_phone) == target_norm:
+                return partner
+        return None
+
     # Endpoint Penambahan Pelanggan Baru LaundryFlow
     @http.route(
         ['/api/laundry/customers', '/api/customers', '/api/laundry/customers/create', '/api/customers/create'],
@@ -423,7 +468,25 @@ class CustomerApiController(http.Controller):
                     }, status=400)
                 mobile = mobile_or_err
 
-            # 6. Pembuatan Record Pelanggan via ORM Odoo (res.partner)
+            # 6. Pemeriksaan Potensi Pelanggan Duplikat berdasarkan Nomor Telepon
+            duplicate_partner = self._find_duplicate_customer(user, phone)
+            if duplicate_partner:
+                existing_name = duplicate_partner.get('name') or 'Pelanggan Lain'
+                return self._json_response({
+                    'success': False,
+                    'message': f'Nomor telepon {phone} sudah terdaftar atas nama {existing_name}.',
+                    'data': {
+                        'id': duplicate_partner['id'],
+                        'name': duplicate_partner.get('name') or '',
+                        'phone': duplicate_partner.get('phone') or '',
+                        'email': duplicate_partner.get('email') or '',
+                        'street': duplicate_partner.get('street') or '',
+                        'city': duplicate_partner.get('city') or '',
+                        'address': duplicate_partner.get('street') or '',
+                    }
+                }, status=409)
+
+            # 7. Pembuatan Record Pelanggan via ORM Odoo (res.partner)
             Partner = request.env['res.partner'].with_user(user)
             vals = {
                 'name': name,
