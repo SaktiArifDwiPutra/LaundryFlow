@@ -689,6 +689,9 @@ class CustomerApiController(http.Controller):
         else:
             clean_uom = uom_name.strip()
 
+        if raw_type != 'service':
+            errors.append('Tipe produk harus berupa layanan (service)')
+
         if errors:
             return False, {
                 'id': prod_id if isinstance(prod_id, int) and not isinstance(prod_id, bool) else None,
@@ -705,7 +708,7 @@ class CustomerApiController(http.Controller):
             'price': unit_price,
             'unit': clean_uom,
             'service_name': clean_name,
-            'type': raw_type if isinstance(raw_type, str) and raw_type.strip() else 'service',
+            'type': 'service',
             'active': bool(raw_active),
             'currency': currency_name,
         }
@@ -762,18 +765,26 @@ class CustomerApiController(http.Controller):
                         'message': 'Parameter limit harus berupa angka yang valid'
                     }, status=400)
 
-            # 4. Domain Filter (Hanya produk aktif)
-            domain = [('active', '=', True)]
+            # 4. Domain Filter di Backend (Hanya layanan laundry aktif & dapat dijual)
+            # Flutter tidak perlu mengirim ?type=service karena backend otomatis memfilter
+            type_param = kwargs.get('type') or request.params.get('type')
+            if type_param is not None and str(type_param).strip() != '':
+                if str(type_param).strip() != 'service':
+                    return self._json_response({
+                        'success': False,
+                        'message': 'Endpoint layanan laundry hanya mendukung produk bertipe service'
+                    }, status=400)
+
+            domain = [
+                ('active', '=', True),
+                ('type', '=', 'service'),
+                ('sale_ok', '=', True),
+            ]
 
             # Filter opsional berdasarkan nama (q / query)
             q = kwargs.get('q') or request.params.get('q') or kwargs.get('query') or request.params.get('query')
             if q and isinstance(q, str) and q.strip():
                 domain.append(('name', 'ilike', q.strip()))
-
-            # Filter opsional berdasarkan tipe produk (misal: 'service')
-            type_param = kwargs.get('type') or request.params.get('type')
-            if type_param and isinstance(type_param, str) and type_param.strip():
-                domain.append(('type', '=', type_param.strip()))
 
             # 5. Ambil data melalui Odoo ORM (product.template)
             ProductTemplate = request.env['product.template'].with_user(user)
@@ -867,10 +878,12 @@ class CustomerApiController(http.Controller):
                     'message': 'ID produk harus berupa angka positif yang valid'
                 }, status=400)
 
-            # 4. Cari Produk Aktif melalui Odoo ORM
+            # 4. Cari Layanan Laundry Aktif melalui Odoo ORM (hanya type='service' & sale_ok=True)
             product = request.env['product.template'].with_user(user).search([
                 ('id', '=', pid),
                 ('active', '=', True),
+                ('type', '=', 'service'),
+                ('sale_ok', '=', True),
             ], limit=1)
 
             if not product:

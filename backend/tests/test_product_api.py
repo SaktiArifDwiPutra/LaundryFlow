@@ -321,3 +321,83 @@ class TestProductApi(TransactionCase):
 
             res_detail = self.controller.get_product_detail(str(inactive_prod.id))
             self.assertEqual(res_detail.status_code, 404)
+
+    def test_12_backend_filters_only_laundry_services_without_type_param(self):
+        """
+        Backend must automatically filter for active saleable service products (type='service', sale_ok=True)
+        without requiring Flutter to send ?type=service, and must exclude 'consu' or internal non-sale items.
+        """
+        service_prod = self.env['product.template'].create({
+            'name': 'Cuci Express Layanan Valid Test',
+            'list_price': 15000.0,
+            'uom_id': self.uom_kg.id,
+            'type': 'service',
+            'active': True,
+            'sale_ok': True,
+        })
+        consu_prod = self.env['product.template'].create({
+            'name': 'Deterjen Gudang Barang Fisik Test',
+            'list_price': 45000.0,
+            'uom_id': self.uom_pcs.id,
+            'type': 'consu',
+            'active': True,
+            'sale_ok': True,
+        })
+        internal_service = self.env['product.template'].create({
+            'name': 'Servis Mesin Internal Non-Sale Test',
+            'list_price': 100000.0,
+            'uom_id': self.uom_pcs.id,
+            'type': 'service',
+            'active': True,
+            'sale_ok': False,
+        })
+
+        mock_req = self._mock_request(user=self.admin_user)
+        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+            # Call without ?type=... parameter (default Flutter call)
+            response = self.controller.get_products()
+            self.assertEqual(response.status_code, 200)
+            result = json.loads(response.get_data(as_text=True))
+            self.assertTrue(result.get('success'))
+
+            returned_ids = [item['id'] for item in result.get('data', [])]
+            self.assertIn(service_prod.id, returned_ids)
+            self.assertNotIn(consu_prod.id, returned_ids)
+            self.assertNotIn(internal_service.id, returned_ids)
+
+            for item in result.get('data', []):
+                self.assertEqual(item.get('type'), 'service')
+
+            # Detail endpoint must also exclude non-service and non-saleable products
+            res_consu_detail = self.controller.get_product_detail(str(consu_prod.id))
+            self.assertEqual(res_consu_detail.status_code, 404)
+
+            res_internal_detail = self.controller.get_product_detail(str(internal_service.id))
+            self.assertEqual(res_internal_detail.status_code, 404)
+
+    def test_13_non_service_type_query_param_rejected(self):
+        """Passing ?type=consu must be rejected with 400 Bad Request, while ?type=service or no type succeeds."""
+        self.env['product.template'].create({
+            'name': 'Cuci Karpet Layanan Test',
+            'list_price': 20000.0,
+            'uom_id': self.uom_pcs.id,
+            'type': 'service',
+            'active': True,
+            'sale_ok': True,
+        })
+
+        mock_req_consu = self._mock_request(user=self.admin_user, params={'type': 'consu'})
+        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_consu):
+            res_consu = self.controller.get_products(type='consu')
+            self.assertEqual(res_consu.status_code, 400)
+            body_consu = json.loads(res_consu.get_data(as_text=True))
+            self.assertFalse(body_consu.get('success'))
+
+        mock_req_service = self._mock_request(user=self.admin_user, params={'type': 'service'})
+        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_service):
+            res_service = self.controller.get_products(type='service')
+            self.assertEqual(res_service.status_code, 200)
+            body_service = json.loads(res_service.get_data(as_text=True))
+            self.assertTrue(body_service.get('success'))
+
+
