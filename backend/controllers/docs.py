@@ -703,7 +703,7 @@ class ApiDocsController(http.Controller):
                         ],
                         "responses": {
                             "200": {
-                                "description": "Daftar produk/layanan berhasil ditemukan.",
+                                "description": "Daftar produk/layanan berhasil diambil (mengembalikan `data: []` jika tidak ada produk yang cocok).",
                                 "content": {
                                     "application/json": {
                                         "schema": {
@@ -754,14 +754,6 @@ class ApiDocsController(http.Controller):
                             },
                             "403": {
                                 "description": "Pengguna tidak memiliki izin membaca data produk.",
-                                "content": {
-                                    "application/json": {
-                                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-                                    }
-                                },
-                            },
-                            "404": {
-                                "description": "Data produk tidak ditemukan.",
                                 "content": {
                                     "application/json": {
                                         "schema": {"$ref": "#/components/schemas/ErrorResponse"},

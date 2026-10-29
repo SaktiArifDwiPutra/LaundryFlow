@@ -796,11 +796,10 @@ class CustomerApiController(http.Controller):
 
             if not products:
                 return self._json_response({
-                    'success': False,
-                    'message': 'Data produk tidak ditemukan',
+                    'success': True,
                     'count': 0,
                     'data': []
-                }, status=404)
+                }, status=200)
 
             # 6. Validasi eksplisit setiap produk (tanpa nilai palsu / default kosong)
             data = []

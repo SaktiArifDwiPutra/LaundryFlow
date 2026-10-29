@@ -110,15 +110,34 @@ class TestProductApi(TransactionCase):
             self.assertFalse(data.get('success'))
 
     def test_05_product_list_empty_result(self):
-        """When no products match the query, must return 404 with success=False."""
+        """When no products match the query or no active laundry services exist, must return HTTP 200 with data=[]."""
         mock_req = self._mock_request(user=self.admin_user, params={'q': 'NON_EXISTENT_PRODUCT_XYZ_999'})
         with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
             response = self.controller.get_products(q='NON_EXISTENT_PRODUCT_XYZ_999')
-            self.assertEqual(response.status_code, 404)
+            self.assertEqual(response.status_code, 200)
             data = json.loads(response.get_data(as_text=True))
-            self.assertFalse(data.get('success'))
+            self.assertTrue(data.get('success'))
             self.assertEqual(data.get('count'), 0)
             self.assertEqual(data.get('data'), [])
+
+        # Also verify when no active service products exist at all (without query filter)
+        active_services = self.env['product.template'].search([
+            ('active', '=', True),
+            ('type', '=', 'service'),
+            ('sale_ok', '=', True),
+        ])
+        active_services.write({'active': False})
+        try:
+            mock_req_all_empty = self._mock_request(user=self.admin_user)
+            with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_all_empty):
+                res_empty = self.controller.get_products()
+                self.assertEqual(res_empty.status_code, 200)
+                body_empty = json.loads(res_empty.get_data(as_text=True))
+                self.assertTrue(body_empty.get('success'))
+                self.assertEqual(body_empty.get('count'), 0)
+                self.assertEqual(body_empty.get('data'), [])
+        finally:
+            active_services.write({'active': True})
 
     def test_06_staging_laundry_services_price_and_uom_consistency(self):
         """Verify staging laundry services return exact id, name, unit_price, and uom from Odoo."""
@@ -317,10 +336,16 @@ class TestProductApi(TransactionCase):
         with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req), \
              patch('odoo.addons.laundryflow_backend.controllers.main.session_store', return_value=mock_session_store):
             res = self.controller.get_products(q='Layanan Nonaktif Arsip Test')
-            self.assertEqual(res.status_code, 404)
+            self.assertEqual(res.status_code, 200)
+            res_body = json.loads(res.get_data(as_text=True))
+            self.assertTrue(res_body.get('success'))
+            self.assertEqual(res_body.get('count'), 0)
+            self.assertEqual(res_body.get('data'), [])
 
             res_detail = self.controller.get_product_detail(str(inactive_prod.id))
             self.assertEqual(res_detail.status_code, 404)
+            detail_body = json.loads(res_detail.get_data(as_text=True))
+            self.assertFalse(detail_body.get('success'))
 
     def test_12_backend_filters_only_laundry_services_without_type_param(self):
         """
