@@ -56,6 +56,12 @@ class TestApiDocs(TransactionCase):
             self.assertIn("/api/laundry/customers/{customer_id}", paths)
             self.assertIn("delete", paths["/api/laundry/customers/{customer_id}"])
 
+            self.assertIn("/api/laundry/products", paths)
+            self.assertIn("get", paths["/api/laundry/products"])
+
+            self.assertIn("/api/laundry/products/{product_id}", paths)
+            self.assertIn("get", paths["/api/laundry/products/{product_id}"])
+
     def test_02_scalar_docs_html(self):
         """Test that /api/docs returns HTTP 200 with Scalar API Reference HTML."""
         mock_req = self._mock_request(method="GET")

@@ -59,6 +59,10 @@ class ApiDocsController(http.Controller):
                     "name": "Customers",
                     "description": "Pencarian dan penambahan data pelanggan LaundryFlow (`res.partner`).",
                 },
+                {
+                    "name": "Products",
+                    "description": "Pengambilan data katalog produk dan layanan laundry (`product.template`).",
+                },
             ],
             "paths": {
                 "/api/laundry/auth/login": {
@@ -648,6 +652,208 @@ class ApiDocsController(http.Controller):
                                             "success": False,
                                             "message": "Terjadi kesalahan internal pada server",
                                         },
+                                    }
+                                },
+                            },
+                        },
+                    }
+                },
+                "/api/laundry/products": {
+                    "get": {
+                        "tags": ["Products"],
+                        "summary": "Daftar Produk & Layanan Laundry",
+                        "operationId": "getProducts",
+                        "description": (
+                            "Mengambil daftar katalog produk dan layanan laundry aktif dari Odoo ORM (`product.template`) "
+                            "beserta validasi harga (`list_price` -> `unit_price`) dan satuan (`uom_id.name` -> `uom`).\n\n"
+                            "**Route Alias yang Didukung:**\n"
+                            "- `GET /api/laundry/products`\n"
+                            "- `GET /api/products`"
+                        ),
+                        "security": [
+                            {"BearerAuth": []},
+                            {"SessionAuth": []},
+                            {"ApiKeyAuth": []},
+                        ],
+                        "parameters": [
+                            {
+                                "name": "q",
+                                "in": "query",
+                                "required": False,
+                                "description": "Kata kunci pencarian berdasarkan nama produk/layanan (case-insensitive).",
+                                "schema": {"type": "string"},
+                                "example": "Cuci",
+                            },
+                            {
+                                "name": "type",
+                                "in": "query",
+                                "required": False,
+                                "description": "Filter tipe produk di Odoo (misal: `service`).",
+                                "schema": {"type": "string"},
+                                "example": "service",
+                            },
+                            {
+                                "name": "limit",
+                                "in": "query",
+                                "required": False,
+                                "description": "Maksimum jumlah record yang dikembalikan (default: 50, maksimum: 100).",
+                                "schema": {"type": "integer", "default": 50, "maximum": 100},
+                                "example": 20,
+                            },
+                        ],
+                        "responses": {
+                            "200": {
+                                "description": "Daftar produk/layanan berhasil ditemukan.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "required": ["success", "count", "data"],
+                                            "properties": {
+                                                "success": {"type": "boolean", "example": True},
+                                                "count": {"type": "integer", "example": 4},
+                                                "data": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "required": ["id", "name", "unit_price", "uom"],
+                                                        "properties": {
+                                                            "id": {"type": "integer", "example": 11},
+                                                            "name": {"type": "string", "example": "Cuci Kiloan"},
+                                                            "unit_price": {"type": "number", "example": 8000},
+                                                            "uom": {"type": "string", "example": "kg"},
+                                                            "price": {"type": "number", "example": 8000},
+                                                            "unit": {"type": "string", "example": "kg"},
+                                                            "service_name": {"type": "string", "example": "Cuci Kiloan"},
+                                                            "type": {"type": "string", "example": "service"},
+                                                            "active": {"type": "boolean", "example": True},
+                                                            "currency": {"type": "string", "example": "IDR"},
+                                                        },
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    }
+                                },
+                            },
+                            "400": {
+                                "description": "Parameter limit tidak valid.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                                    }
+                                },
+                            },
+                            "401": {
+                                "description": "Permintaan belum terautentikasi atau token tidak valid.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                                    }
+                                },
+                            },
+                            "403": {
+                                "description": "Pengguna tidak memiliki izin membaca data produk.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                                    }
+                                },
+                            },
+                            "404": {
+                                "description": "Data produk tidak ditemukan.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                                    }
+                                },
+                            },
+                            "422": {
+                                "description": "Data produk di Odoo memiliki harga atau satuan yang tidak valid/tidak lengkap.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                                    }
+                                },
+                            },
+                        },
+                    }
+                },
+                "/api/laundry/products/{product_id}": {
+                    "get": {
+                        "tags": ["Products"],
+                        "summary": "Detail Produk & Layanan Laundry",
+                        "operationId": "getProductDetail",
+                        "description": "Mengambil detail satu produk/layanan laundry berdasarkan ID (`product.template`).",
+                        "security": [
+                            {"BearerAuth": []},
+                            {"SessionAuth": []},
+                            {"ApiKeyAuth": []},
+                        ],
+                        "parameters": [
+                            {
+                                "name": "product_id",
+                                "in": "path",
+                                "required": True,
+                                "description": "ID unik produk (`product.template`).",
+                                "schema": {"type": "integer", "minimum": 1},
+                                "example": 11,
+                            }
+                        ],
+                        "responses": {
+                            "200": {
+                                "description": "Detail produk berhasil ditemukan.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "required": ["success", "data"],
+                                            "properties": {
+                                                "success": {"type": "boolean", "example": True},
+                                                "data": {
+                                                    "type": "object",
+                                                    "required": ["id", "name", "unit_price", "uom"],
+                                                    "properties": {
+                                                        "id": {"type": "integer", "example": 11},
+                                                        "name": {"type": "string", "example": "Cuci Kiloan"},
+                                                        "unit_price": {"type": "number", "example": 8000},
+                                                        "uom": {"type": "string", "example": "kg"},
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    }
+                                },
+                            },
+                            "400": {
+                                "description": "ID produk tidak valid.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                                    }
+                                },
+                            },
+                            "401": {
+                                "description": "Permintaan belum terautentikasi.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                                    }
+                                },
+                            },
+                            "404": {
+                                "description": "Data produk tidak ditemukan.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                                    }
+                                },
+                            },
+                            "422": {
+                                "description": "Data produk memiliki harga atau satuan yang tidak valid.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
                                     }
                                 },
                             },
