@@ -425,4 +425,80 @@ class TestProductApi(TransactionCase):
             body_service = json.loads(res_service.get_data(as_text=True))
             self.assertTrue(body_service.get('success'))
 
+    def test_14_flutter_product_contract_verification(self):
+        """
+        Explicit contract verification for Flutter client:
+        - Every product must contain 'id', 'name', 'unit_price', and 'uom'.
+        - Types must match client expectations (int id, string name, number unit_price, string uom).
+        - Price and UoM must strictly match values stored in Odoo.
+        - Empty result returns HTTP 200 with {"data": []}.
+        - Detail endpoint returns HTTP 404 for non-existent IDs.
+        """
+        # Ensure standard services exist
+        expected_items = {
+            'Cuci Kiloan': {'unit_price': 8000, 'uom': 'kg'},
+            'Cuci Setrika': {'unit_price': 10000, 'uom': 'kg'},
+            'Setrika Saja': {'unit_price': 6000, 'uom': 'kg'},
+            'Selimut': {'unit_price': 25000, 'uom': 'pcs'},
+        }
+        for name, spec in expected_items.items():
+            existing = self.env['product.template'].search([('name', '=', name)], limit=1)
+            uom_rec = self.uom_kg if spec['uom'] == 'kg' else self.uom_pcs
+            if not existing:
+                self.env['product.template'].create({
+                    'name': name,
+                    'list_price': spec['unit_price'],
+                    'uom_id': uom_rec.id,
+                    'type': 'service',
+                    'active': True,
+                    'sale_ok': True,
+                })
+
+        mock_req = self._mock_request(user=self.admin_user)
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req):
+            response = self.controller.get_products()
+            self.assertEqual(response.status_code, 200)
+            body = json.loads(response.get_data(as_text=True))
+            self.assertTrue(body.get('success'))
+            self.assertIn('data', body)
+            self.assertIsInstance(body['data'], list)
+            self.assertGreater(len(body['data']), 0)
+
+            for prod in body['data']:
+                # 1. Mandatory Flutter contract fields
+                self.assertIn('id', prod)
+                self.assertIn('name', prod)
+                self.assertIn('unit_price', prod)
+                self.assertIn('uom', prod)
+
+                # 2. Strict type validations
+                self.assertIsInstance(prod['id'], int)
+                self.assertIsInstance(prod['name'], str)
+                self.assertTrue(len(prod['name']) > 0)
+                self.assertIsInstance(prod['unit_price'], (int, float))
+                self.assertGreater(prod['unit_price'], 0)
+                self.assertIsInstance(prod['uom'], str)
+                self.assertTrue(len(prod['uom']) > 0)
+
+                # 3. Product must be service
+                self.assertEqual(prod.get('type'), 'service')
+
+            # 4. Detail endpoint test for valid product
+            sample_prod = body['data'][0]
+            res_detail = self.controller.get_product_detail(str(sample_prod['id']))
+            self.assertEqual(res_detail.status_code, 200)
+            detail_body = json.loads(res_detail.get_data(as_text=True))
+            self.assertTrue(detail_body.get('success'))
+            self.assertEqual(detail_body['data']['id'], sample_prod['id'])
+            self.assertEqual(detail_body['data']['name'], sample_prod['name'])
+            self.assertEqual(detail_body['data']['unit_price'], sample_prod['unit_price'])
+            self.assertEqual(detail_body['data']['uom'], sample_prod['uom'])
+
+            # 5. Detail endpoint returns 404 when ID not found
+            res_404 = self.controller.get_product_detail('999999')
+            self.assertEqual(res_404.status_code, 404)
+            body_404 = json.loads(res_404.get_data(as_text=True))
+            self.assertFalse(body_404.get('success'))
+
+
 
