@@ -4,6 +4,7 @@ enum OrderStatus {
   drying('drying', 'Dikeringkan'),
   ironing('ironing', 'Disetrika'),
   ready('ready', 'Siap Diambil'),
+  outForDelivery('out_for_delivery', 'Sedang Diantar'),
   completed('completed', 'Selesai'),
   unknown('unknown', 'Tidak dikenal');
 
@@ -17,6 +18,7 @@ enum OrderStatus {
         OrderStatus.drying => OrderStatus.ironing,
         OrderStatus.ironing => OrderStatus.ready,
         OrderStatus.ready => OrderStatus.completed,
+        OrderStatus.outForDelivery => OrderStatus.completed,
         OrderStatus.completed || OrderStatus.unknown => null,
       };
 

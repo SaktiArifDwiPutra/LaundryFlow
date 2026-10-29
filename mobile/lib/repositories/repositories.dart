@@ -13,21 +13,20 @@ import 'odoo_auth_repository.dart';
 import 'odoo_customer_repository.dart';
 import 'order_repository.dart';
 import 'service_repository.dart';
+import 'odoo_service_repository.dart';
 
 final ApiClient apiClient = ApiClient(
   baseUrl: baseUrl,
   onUnauthorized: () => currentUser.value = null,
 );
 
-/// Satu-satunya tempat memilih sumber data.
-/// USE_MOCK=false memakai backend untuk login dan pelanggan (cari + tambah).
 final AuthRepository authRepository =
     useMock ? MockAuthRepository() : OdooAuthRepository(apiClient);
 final CustomerRepository customerRepository =
     useMock ? MockCustomerRepository() : OdooCustomerRepository(apiClient);
-
-// Endpoint pesanan, layanan, dan invoice belum ada di backend, jadi tetap mock.
+ 
 final OrderRepository orderRepository = MockOrderRepository();
-final ServiceRepository serviceRepository = MockServiceRepository();
+final ServiceRepository serviceRepository =
+    useMock ? MockServiceRepository() : OdooServiceRepository(apiClient);
 final InvoiceRepository invoiceRepository =
     MockInvoiceRepository(orderRepository);

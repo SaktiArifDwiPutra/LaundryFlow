@@ -27,7 +27,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Future<void> _advance(Order order) async {
-    final next = order.status.next;
+    final next = order.nextStatus;
     if (next == null) return;
 
     final confirmed = await showDialog<bool>(
@@ -88,7 +88,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           }
 
           final order = snapshot.data!;
-          final next = order.status.next;
+          final next = order.nextStatus;
 
           return ListView(
             padding: const EdgeInsets.all(16),

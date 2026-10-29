@@ -13,6 +13,7 @@ class StatusChip extends StatelessWidget {
         OrderStatus.drying => Colors.orange,
         OrderStatus.ironing => Colors.deepPurple,
         OrderStatus.ready => Colors.green,
+        OrderStatus.outForDelivery => Colors.teal,
         OrderStatus.completed => Colors.grey,
         OrderStatus.unknown => Colors.red,
       };

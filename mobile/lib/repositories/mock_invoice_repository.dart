@@ -3,9 +3,6 @@ import '../models/order_status.dart';
 import 'invoice_repository.dart';
 import 'order_repository.dart';
 
-/// Meniru GET /orders/{id}/invoice. Kapan invoice dibuat belum dikonfirmasi
-/// backend; di mock: ada saat pesanan "ready" (belum dibayar) dan
-/// "completed" (lunas).
 class MockInvoiceRepository implements InvoiceRepository {
   MockInvoiceRepository(this._orders);
 
@@ -15,7 +12,9 @@ class MockInvoiceRepository implements InvoiceRepository {
   Future<Invoice?> getForOrder(int orderId) async {
     final order = await _orders.get(orderId);
     final status = order.status;
-    if (status != OrderStatus.ready && status != OrderStatus.completed) {
+    if (status != OrderStatus.ready &&
+        status != OrderStatus.outForDelivery &&
+        status != OrderStatus.completed) {
       return null;
     }
     return Invoice.fromJson({

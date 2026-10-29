@@ -96,6 +96,13 @@ class ApiClient {
     }
     if (ok && json != null && json['success'] != false) return json;
 
+    if (response.statusCode == 404 &&
+        json != null &&
+        json['data'] is List &&
+        (json['data'] as List).isEmpty) {
+      return json;
+    }
+
     if (response.statusCode == 401 && sessionId != null) {
       sessionId = null;
       onUnauthorized?.call();
