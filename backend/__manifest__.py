@@ -8,6 +8,7 @@
         "base",
         "contacts",
         "account",
+        "stock",
     ],
     "data": [
         "security/ir.access.csv",

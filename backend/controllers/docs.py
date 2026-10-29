@@ -59,6 +59,10 @@ class ApiDocsController(http.Controller):
                     "name": "Customers",
                     "description": "Pencarian dan penambahan data pelanggan LaundryFlow (`res.partner`).",
                 },
+                {
+                    "name": "Products",
+                    "description": "Pengambilan data katalog produk dan layanan laundry (`product.template`).",
+                },
             ],
             "paths": {
                 "/api/laundry/auth/login": {
@@ -654,6 +658,270 @@ class ApiDocsController(http.Controller):
                         },
                     }
                 },
+                "/api/laundry/products": {
+                    "get": {
+                        "tags": ["Products"],
+                        "summary": "Daftar Produk & Layanan Laundry",
+                        "operationId": "getProducts",
+                        "description": (
+                            "Mengambil daftar katalog produk dan layanan laundry aktif dari Odoo ORM (`product.template`) "
+                            "beserta validasi harga (`list_price` -> `unit_price`) dan satuan (`uom_id.name` -> `uom`).\n\n"
+                            "**Aturan Filter Backend:**\n"
+                            "- Filter tipe produk dilakukan otomatis oleh backend Odoo (`type='service'`, `sale_ok=True`, `active=True`).\n"
+                            "- Klien (Flutter) **tidak perlu** mengirim parameter `type`.\n"
+                            "- Produk yang bukan layanan laundry (misal barang fisik/konsumsi `consu` atau non-sale) tidak akan ditampilkan.\n\n"
+                            "**Karakteristik Respon:**\n"
+                            "- Setiap produk mengembalikan field utama: `id`, `name`, `unit_price`, dan `uom`.\n"
+                            "- Jika tidak ada produk yang cocok, endpoint mengembalikan HTTP 200 dengan `{\"data\": []}` (bukan 404).\n\n"
+                            "**Route Alias yang Didukung:**\n"
+                            "- `GET /api/laundry/products`\n"
+                            "- `GET /api/products`"
+                        ),
+                        "security": [
+                            {"BearerAuth": []},
+                            {"SessionAuth": []},
+                            {"ApiKeyAuth": []},
+                        ],
+                        "parameters": [
+                            {
+                                "name": "q",
+                                "in": "query",
+                                "required": False,
+                                "description": "Kata kunci pencarian berdasarkan nama produk/layanan laundry (case-insensitive).",
+                                "schema": {"type": "string"},
+                                "example": "Cuci",
+                            },
+                            {
+                                "name": "limit",
+                                "in": "query",
+                                "required": False,
+                                "description": "Maksimum jumlah record yang dikembalikan (default: 50, maksimum: 100).",
+                                "schema": {"type": "integer", "default": 50, "maximum": 100},
+                                "example": 20,
+                            },
+                        ],
+                        "responses": {
+                            "200": {
+                                "description": "Daftar produk/layanan berhasil diambil (mengembalikan `{\"data\": []}` jika tidak ada produk yang cocok).",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "$ref": "#/components/schemas/ProductListResponse",
+                                        },
+                                        "examples": {
+                                            "daftar_berisi_produk": {
+                                                "summary": "Contoh response berisi produk layanan laundry (konsisten dengan data Odoo staging)",
+                                                "value": {
+                                                    "success": True,
+                                                    "count": 4,
+                                                    "data": [
+                                                        {
+                                                            "id": 11,
+                                                            "name": "Cuci Kiloan",
+                                                            "unit_price": 8000,
+                                                            "uom": "kg",
+                                                            "price": 8000,
+                                                            "unit": "kg",
+                                                            "service_name": "Cuci Kiloan",
+                                                            "type": "service",
+                                                            "active": True,
+                                                            "currency": "IDR",
+                                                        },
+                                                        {
+                                                            "id": 12,
+                                                            "name": "Cuci Setrika",
+                                                            "unit_price": 10000,
+                                                            "uom": "kg",
+                                                            "price": 10000,
+                                                            "unit": "kg",
+                                                            "service_name": "Cuci Setrika",
+                                                            "type": "service",
+                                                            "active": True,
+                                                            "currency": "IDR",
+                                                        },
+                                                        {
+                                                            "id": 13,
+                                                            "name": "Setrika Saja",
+                                                            "unit_price": 6000,
+                                                            "uom": "kg",
+                                                            "price": 6000,
+                                                            "unit": "kg",
+                                                            "service_name": "Setrika Saja",
+                                                            "type": "service",
+                                                            "active": True,
+                                                            "currency": "IDR",
+                                                        },
+                                                        {
+                                                            "id": 14,
+                                                            "name": "Selimut",
+                                                            "unit_price": 25000,
+                                                            "uom": "pcs",
+                                                            "price": 25000,
+                                                            "unit": "pcs",
+                                                            "service_name": "Selimut",
+                                                            "type": "service",
+                                                            "active": True,
+                                                            "currency": "IDR",
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            "daftar_kosong": {
+                                                "summary": "Contoh response daftar kosong saat pencarian tidak cocok (HTTP 200 dengan data [])",
+                                                "value": {
+                                                    "success": True,
+                                                    "count": 0,
+                                                    "data": [],
+                                                },
+                                            },
+                                        },
+                                    }
+                                },
+                            },
+                            "400": {
+                                "description": "Parameter limit tidak valid.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                                        "example": {
+                                            "success": False,
+                                            "message": "Parameter limit harus berupa angka yang valid",
+                                        },
+                                    }
+                                },
+                            },
+                            "401": {
+                                "description": "Permintaan belum terautentikasi atau token tidak valid.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                                        "example": {
+                                            "success": False,
+                                            "message": "Autentikasi diperlukan. Akses tidak diizinkan.",
+                                        },
+                                    }
+                                },
+                            },
+                            "403": {
+                                "description": "Pengguna tidak memiliki izin membaca data produk.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                                        "example": {
+                                            "success": False,
+                                            "message": "Akses ditolak: Anda tidak memiliki izin untuk melihat data produk.",
+                                        },
+                                    }
+                                },
+                            },
+                            "422": {
+                                "description": "Data produk di Odoo memiliki harga atau satuan yang tidak valid/tidak lengkap.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                                    }
+                                },
+                            },
+                        },
+                    }
+                },
+                "/api/laundry/products/{product_id}": {
+                    "get": {
+                        "tags": ["Products"],
+                        "summary": "Detail Produk & Layanan Laundry",
+                        "operationId": "getProductDetail",
+                        "description": (
+                            "Mengambil detail satu layanan laundry berdasarkan ID (`product.template`). "
+                            "Hanya produk bertipe `service` yang aktif dan dapat dijual yang dapat diakses."
+                        ),
+                        "security": [
+                            {"BearerAuth": []},
+                            {"SessionAuth": []},
+                            {"ApiKeyAuth": []},
+                        ],
+                        "parameters": [
+                            {
+                                "name": "product_id",
+                                "in": "path",
+                                "required": True,
+                                "description": "ID unik produk (`product.template`).",
+                                "schema": {"type": "integer", "minimum": 1},
+                                "example": 11,
+                            }
+                        ],
+                        "responses": {
+                            "200": {
+                                "description": "Detail produk berhasil ditemukan.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "$ref": "#/components/schemas/ProductDetailResponse",
+                                        },
+                                        "example": {
+                                            "success": True,
+                                            "data": {
+                                                "id": 11,
+                                                "name": "Cuci Kiloan",
+                                                "unit_price": 8000,
+                                                "uom": "kg",
+                                                "price": 8000,
+                                                "unit": "kg",
+                                                "service_name": "Cuci Kiloan",
+                                                "type": "service",
+                                                "active": True,
+                                                "currency": "IDR",
+                                            },
+                                        },
+                                    }
+                                },
+                            },
+                            "400": {
+                                "description": "ID produk tidak valid.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                                        "example": {
+                                            "success": False,
+                                            "message": "ID produk harus berupa angka positif yang valid",
+                                        },
+                                    }
+                                },
+                            },
+                            "401": {
+                                "description": "Permintaan belum terautentikasi.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                                        "example": {
+                                            "success": False,
+                                            "message": "Autentikasi diperlukan. Akses tidak diizinkan.",
+                                        },
+                                    }
+                                },
+                            },
+                            "404": {
+                                "description": "Data produk tidak ditemukan.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                                        "example": {
+                                            "success": False,
+                                            "message": "Data produk tidak ditemukan",
+                                        },
+                                    }
+                                },
+                            },
+                            "422": {
+                                "description": "Data produk memiliki harga atau satuan yang tidak valid.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                                    }
+                                },
+                            },
+                        },
+                    }
+                },
             },
             "components": {
                 "securitySchemes": {
@@ -907,6 +1175,97 @@ class ApiDocsController(http.Controller):
                                 "type": "string",
                                 "description": "Pesan kesalahan yang menjelaskan penyebab kegagalan request.",
                                 "example": "Autentikasi diperlukan. Akses tidak diizinkan.",
+                            },
+                        },
+                    },
+                    "ProductItem": {
+                        "type": "object",
+                        "required": ["id", "name", "unit_price", "uom"],
+                        "properties": {
+                            "id": {
+                                "type": "integer",
+                                "description": "ID unik produk / layanan laundry (`product.template`).",
+                                "example": 11,
+                            },
+                            "name": {
+                                "type": "string",
+                                "description": "Nama produk atau layanan laundry.",
+                                "example": "Cuci Kiloan",
+                            },
+                            "unit_price": {
+                                "type": "number",
+                                "description": "Harga satuan layanan laundry dari field Odoo `list_price`.",
+                                "example": 8000,
+                            },
+                            "uom": {
+                                "type": "string",
+                                "description": "Nama satuan layanan laundry dari relasi Odoo `uom_id.name`.",
+                                "example": "kg",
+                            },
+                            "price": {
+                                "type": "number",
+                                "description": "Alias harga satuan (kompatibilitas).",
+                                "example": 8000,
+                            },
+                            "unit": {
+                                "type": "string",
+                                "description": "Alias satuan produk (kompatibilitas).",
+                                "example": "kg",
+                            },
+                            "service_name": {
+                                "type": "string",
+                                "description": "Alias nama layanan (kompatibilitas).",
+                                "example": "Cuci Kiloan",
+                            },
+                            "type": {
+                                "type": "string",
+                                "description": "Tipe produk di Odoo (selalu `service` untuk layanan laundry).",
+                                "example": "service",
+                            },
+                            "active": {
+                                "type": "boolean",
+                                "description": "Status aktif produk di Odoo.",
+                                "example": True,
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "Mata uang transaksi produk (default: `IDR`).",
+                                "example": "IDR",
+                            },
+                        },
+                    },
+                    "ProductListResponse": {
+                        "type": "object",
+                        "required": ["success", "count", "data"],
+                        "properties": {
+                            "success": {
+                                "type": "boolean",
+                                "example": True,
+                            },
+                            "count": {
+                                "type": "integer",
+                                "description": "Jumlah produk yang dikembalikan (0 jika kosong).",
+                                "example": 4,
+                            },
+                            "data": {
+                                "type": "array",
+                                "description": "Daftar produk layanan laundry. Mengembalikan array kosong `[]` jika tidak ada produk yang cocok.",
+                                "items": {
+                                    "$ref": "#/components/schemas/ProductItem",
+                                },
+                            },
+                        },
+                    },
+                    "ProductDetailResponse": {
+                        "type": "object",
+                        "required": ["success", "data"],
+                        "properties": {
+                            "success": {
+                                "type": "boolean",
+                                "example": True,
+                            },
+                            "data": {
+                                "$ref": "#/components/schemas/ProductItem",
                             },
                         },
                     },

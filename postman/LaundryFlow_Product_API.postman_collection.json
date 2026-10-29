@@ -1,0 +1,189 @@
+{
+  "info": {
+    "name": "LaundryFlow API Contract Verification",
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "description": "Postman Collection untuk verifikasi kontrak LaundryFlow Product & Customer API sesuai kebutuhan Flutter.\nKonfigurasi sensitif (token, password) menggunakan environment variables `{{authToken}}` dan `{{password}}`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://117.53.47.93:8069",
+      "type": "string"
+    },
+    {
+      "key": "dbName",
+      "value": "odoo20",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Auth - Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"login\": \"{{username}}\",\n  \"password\": \"{{password}}\",\n  \"db\": \"{{dbName}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/laundry/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "laundry", "auth", "login"]
+        },
+        "description": "Endpoint login untuk mendapatkan session token `session_id`."
+      }
+    },
+    {
+      "name": "02. Products - Daftar Layanan Laundry (Aktual Staging)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/laundry/products",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "laundry", "products"]
+        },
+        "description": "Mengambil daftar layanan laundry aktif. Memastikan field id, name, unit_price, dan uom tersedia."
+      }
+    },
+    {
+      "name": "03. Products - Daftar Kosong (Search Tidak Cocok)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/laundry/products?q=NON_EXISTENT_XYZ",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "laundry", "products"],
+          "query": [
+            {
+              "key": "q",
+              "value": "NON_EXISTENT_XYZ"
+            }
+          ]
+        },
+        "description": "Memastikan respon daftar kosong menghasilkan HTTP 200 dengan JSON `{\"success\": true, \"count\": 0, \"data\": []}`."
+      }
+    },
+    {
+      "name": "04. Products - Detail Produk Ditemukan",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/laundry/products/11",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "laundry", "products", "11"]
+        },
+        "description": "Mengambil detail satu layanan laundry berdasarkan ID."
+      }
+    },
+    {
+      "name": "05. Products - Detail Produk Tidak Ditemukan (404)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/laundry/products/999999",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "laundry", "products", "999999"]
+        },
+        "description": "Memastikan ID produk yang tidak ditemukan menghasilkan HTTP 404 Not Found."
+      }
+    },
+    {
+      "name": "06. Products - Request Tanpa Autentikasi (401)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/laundry/products",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "laundry", "products"]
+        },
+        "description": "Memastikan request tanpa token/sesi ditolak dengan HTTP 401 Unauthorized."
+      }
+    },
+    {
+      "name": "07. Products - Parameter Type Non-Service Ditolak (400)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/laundry/products?type=consu",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "laundry", "products"],
+          "query": [
+            {
+              "key": "type",
+              "value": "consu"
+            }
+          ]
+        },
+        "description": "Memastikan filter backend menolak tipe selain service dengan HTTP 400 Bad Request."
+      }
+    },
+    {
+      "name": "08. Customers - Cari Pelanggan (Customer API Berfungsi)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/laundry/customers/search?q=Rian",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "laundry", "customers", "search"],
+          "query": [
+            {
+              "key": "q",
+              "value": "Rian"
+            }
+          ]
+        },
+        "description": "Memastikan Customer API yang sudah ada tetap berfungsi normal."
+      }
+    }
+  ]
+}
+
