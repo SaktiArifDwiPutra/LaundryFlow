@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from odoo.exceptions import AccessError
 from odoo.tests.common import TransactionCase
-from ..controllers.main import CustomerApiController
+from ..controllers.product_controller import ProductApiController
 
 
 class TestProductApi(TransactionCase):
@@ -21,7 +21,7 @@ class TestProductApi(TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.controller = CustomerApiController()
+        cls.controller = ProductApiController()
         cls.admin_user = cls.env.ref('base.user_admin')
         cls.public_user = cls.env.ref('base.public_user')
 
@@ -66,7 +66,7 @@ class TestProductApi(TransactionCase):
     def test_01_product_list_unauthorized(self):
         """Unauthenticated request must return 401 Unauthorized."""
         mock_req = self._mock_request(user=None)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req):
             response = self.controller.get_products()
             self.assertEqual(response.status_code, 401)
             data = json.loads(response.get_data(as_text=True))
@@ -76,7 +76,7 @@ class TestProductApi(TransactionCase):
     def test_02_product_list_public_user_unauthorized(self):
         """Request from public user must return 401 Unauthorized."""
         mock_req = self._mock_request(user=self.public_user)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req):
             response = self.controller.get_products()
             self.assertEqual(response.status_code, 401)
             data = json.loads(response.get_data(as_text=True))
@@ -85,7 +85,7 @@ class TestProductApi(TransactionCase):
     def test_03_product_list_forbidden(self):
         """User lacking read permissions on product.template must receive 403 Forbidden."""
         mock_req = self._mock_request(user=self.admin_user)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req):
             with patch.object(type(self.env['product.template']), 'check_access', side_effect=AccessError('Permission Denied')):
                 response = self.controller.get_products()
                 self.assertEqual(response.status_code, 403)
@@ -96,14 +96,14 @@ class TestProductApi(TransactionCase):
     def test_04_product_list_invalid_limit(self):
         """Invalid limit parameters (<=0 or non-integer) must return 400 Bad Request."""
         mock_req = self._mock_request(user=self.admin_user, params={'limit': '0'})
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req):
             res_zero = self.controller.get_products(limit='0')
             self.assertEqual(res_zero.status_code, 400)
             data = json.loads(res_zero.get_data(as_text=True))
             self.assertFalse(data.get('success'))
 
         mock_req_str = self._mock_request(user=self.admin_user, params={'limit': 'abc'})
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_str):
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req_str):
             res_str = self.controller.get_products(limit='abc')
             self.assertEqual(res_str.status_code, 400)
             data = json.loads(res_str.get_data(as_text=True))
@@ -112,7 +112,7 @@ class TestProductApi(TransactionCase):
     def test_05_product_list_empty_result(self):
         """When no products match the query or no active laundry services exist, must return HTTP 200 with data=[]."""
         mock_req = self._mock_request(user=self.admin_user, params={'q': 'NON_EXISTENT_PRODUCT_XYZ_999'})
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req):
             response = self.controller.get_products(q='NON_EXISTENT_PRODUCT_XYZ_999')
             self.assertEqual(response.status_code, 200)
             data = json.loads(response.get_data(as_text=True))
@@ -129,7 +129,7 @@ class TestProductApi(TransactionCase):
         active_services.write({'active': False})
         try:
             mock_req_all_empty = self._mock_request(user=self.admin_user)
-            with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_all_empty):
+            with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req_all_empty):
                 res_empty = self.controller.get_products()
                 self.assertEqual(res_empty.status_code, 200)
                 body_empty = json.loads(res_empty.get_data(as_text=True))
@@ -161,7 +161,7 @@ class TestProductApi(TransactionCase):
                 })
 
         mock_req = self._mock_request(user=self.admin_user)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req):
             response = self.controller.get_products()
             self.assertEqual(response.status_code, 200)
             result = json.loads(response.get_data(as_text=True))
@@ -194,7 +194,7 @@ class TestProductApi(TransactionCase):
         })
 
         mock_req = self._mock_request(user=self.admin_user, params={'q': 'Cuci Sepatu Khusus Test'})
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req):
             response = self.controller.get_products(q='Cuci Sepatu Khusus Test')
             self.assertEqual(response.status_code, 200)
             result = json.loads(response.get_data(as_text=True))
@@ -216,7 +216,7 @@ class TestProductApi(TransactionCase):
         })
 
         mock_req = self._mock_request(user=self.admin_user, params={'q': 'Produk Harga Nol Invalid Test'})
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req):
             res_zero = self.controller.get_products(q='Produk Harga Nol Invalid Test')
             self.assertEqual(res_zero.status_code, 422)
             body_zero = json.loads(res_zero.get_data(as_text=True))
@@ -228,7 +228,7 @@ class TestProductApi(TransactionCase):
         # Also test negative price via detail endpoint
         zero_price_prod.write({'list_price': -5000.0})
         mock_req_detail = self._mock_request(user=self.admin_user)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_detail):
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req_detail):
             res_neg = self.controller.get_product_detail(str(zero_price_prod.id))
             self.assertEqual(res_neg.status_code, 422)
             body_neg = json.loads(res_neg.get_data(as_text=True))
@@ -277,7 +277,7 @@ class TestProductApi(TransactionCase):
 
         # Verify endpoint returns 422 when Odoo returns a record with missing uom_id
         mock_req = self._mock_request(user=self.admin_user)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req):
             with patch.object(type(self.env['product.template']), 'search', return_value=[missing_uom_record]):
                 response = self.controller.get_products()
                 self.assertEqual(response.status_code, 422)
@@ -296,7 +296,7 @@ class TestProductApi(TransactionCase):
         })
 
         mock_req = self._mock_request(user=self.admin_user)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req):
             # Valid detail
             res_ok = self.controller.get_product_detail(str(prod.id))
             self.assertEqual(res_ok.status_code, 200)
@@ -333,8 +333,8 @@ class TestProductApi(TransactionCase):
             headers={'Authorization': 'Bearer valid_bearer_token_product'},
             params={'q': 'Layanan Nonaktif Arsip Test'},
         )
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req), \
-             patch('odoo.addons.laundryflow_backend.controllers.main.session_store', return_value=mock_session_store):
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req), \
+             patch('odoo.addons.laundryflow_backend.controllers.product_controller.session_store', return_value=mock_session_store):
             res = self.controller.get_products(q='Layanan Nonaktif Arsip Test')
             self.assertEqual(res.status_code, 200)
             res_body = json.loads(res.get_data(as_text=True))
@@ -378,7 +378,7 @@ class TestProductApi(TransactionCase):
         })
 
         mock_req = self._mock_request(user=self.admin_user)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req):
             # Call without ?type=... parameter (default Flutter call)
             response = self.controller.get_products()
             self.assertEqual(response.status_code, 200)
@@ -412,14 +412,14 @@ class TestProductApi(TransactionCase):
         })
 
         mock_req_consu = self._mock_request(user=self.admin_user, params={'type': 'consu'})
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_consu):
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req_consu):
             res_consu = self.controller.get_products(type='consu')
             self.assertEqual(res_consu.status_code, 400)
             body_consu = json.loads(res_consu.get_data(as_text=True))
             self.assertFalse(body_consu.get('success'))
 
         mock_req_service = self._mock_request(user=self.admin_user, params={'type': 'service'})
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_service):
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req_service):
             res_service = self.controller.get_products(type='service')
             self.assertEqual(res_service.status_code, 200)
             body_service = json.loads(res_service.get_data(as_text=True))

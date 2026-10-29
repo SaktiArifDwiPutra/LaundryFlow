@@ -2,7 +2,7 @@ import json
 from unittest.mock import MagicMock, patch
 from odoo.exceptions import AccessError
 from odoo.tests.common import TransactionCase
-from ..controllers.main import CustomerApiController
+from ..controllers.customer_controller import CustomerApiController
 
 
 class TestCustomerApi(TransactionCase):
@@ -63,7 +63,7 @@ class TestCustomerApi(TransactionCase):
     def test_01_customer_search_unauthorized(self):
         """Test access without authorization returns 401 Unauthorized."""
         mock_req = self._mock_request(user=None)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
             response = self.controller.search_customers(q="Budi")
             self.assertEqual(response.status_code, 401)
             data = json.loads(response.get_data(as_text=True))
@@ -73,7 +73,7 @@ class TestCustomerApi(TransactionCase):
     def test_02_customer_search_invalid_parameter_missing_q(self):
         """Test search with missing 'q' parameter returns 400 Bad Request."""
         mock_req = self._mock_request(user=self.admin_user)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
             response = self.controller.search_customers()
             self.assertEqual(response.status_code, 400)
             data = json.loads(response.get_data(as_text=True))
@@ -83,7 +83,7 @@ class TestCustomerApi(TransactionCase):
     def test_03_customer_search_invalid_parameter_empty_q(self):
         """Test search with empty or whitespace 'q' returns 400 Bad Request."""
         mock_req = self._mock_request(user=self.admin_user)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
             response = self.controller.search_customers(q="   ")
             self.assertEqual(response.status_code, 400)
             data = json.loads(response.get_data(as_text=True))
@@ -93,7 +93,7 @@ class TestCustomerApi(TransactionCase):
     def test_04_customer_search_invalid_limit(self):
         """Test search with negative or non-integer limit returns 400 Bad Request."""
         mock_req = self._mock_request(user=self.admin_user)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
             # Negative limit
             response_neg = self.controller.search_customers(q="Budi", limit="-5")
             self.assertEqual(response_neg.status_code, 400)
@@ -110,7 +110,7 @@ class TestCustomerApi(TransactionCase):
         """Test successful customer search by name using existing contacts."""
         target_name = self.partner_with_phone.name[:4]
         mock_req = self._mock_request(user=self.admin_user)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
             response = self.controller.search_customers(q=target_name)
             self.assertEqual(response.status_code, 200)
             data = json.loads(response.get_data(as_text=True))
@@ -131,7 +131,7 @@ class TestCustomerApi(TransactionCase):
         if self.partner_with_phone.phone:
             target_phone = self.partner_with_phone.phone[:5]
             mock_req = self._mock_request(user=self.admin_user)
-            with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+            with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
                 response = self.controller.search_customers(q=target_phone)
                 self.assertEqual(response.status_code, 200)
                 data = json.loads(response.get_data(as_text=True))
@@ -141,7 +141,7 @@ class TestCustomerApi(TransactionCase):
     def test_07_customer_search_empty_result(self):
         """Test search query with no matching customer returns 404 and success=False."""
         mock_req = self._mock_request(user=self.admin_user)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
             response = self.controller.search_customers(q="XYZ_NON_EXISTENT_NAME_99999")
             self.assertEqual(response.status_code, 404)
             data = json.loads(response.get_data(as_text=True))
@@ -153,7 +153,7 @@ class TestCustomerApi(TransactionCase):
     def test_08_customer_search_limit_capping(self):
         """Test that limit restricts the result count and caps at 50."""
         mock_req = self._mock_request(user=self.admin_user)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
             response = self.controller.search_customers(q="a", limit=1)
             self.assertEqual(response.status_code, 200)
             data = json.loads(response.get_data(as_text=True))
@@ -163,7 +163,7 @@ class TestCustomerApi(TransactionCase):
     def test_09_create_customer_unauthorized(self):
         """Test that unauthenticated request to create customer returns 401."""
         mock_req = self._mock_request(user=None, method='POST')
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
             response = self.controller.create_customer()
             self.assertEqual(response.status_code, 401)
             data = json.loads(response.get_data(as_text=True))
@@ -173,7 +173,7 @@ class TestCustomerApi(TransactionCase):
         """Test creating customer with empty or invalid JSON body returns 400."""
         # Empty body
         mock_req = self._mock_request(user=self.admin_user, method='POST', data=b'')
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
             response = self.controller.create_customer()
             self.assertEqual(response.status_code, 400)
             data = json.loads(response.get_data(as_text=True))
@@ -181,7 +181,7 @@ class TestCustomerApi(TransactionCase):
 
         # Malformed JSON
         mock_req = self._mock_request(user=self.admin_user, method='POST', data=b'{not-valid-json}')
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
             response = self.controller.create_customer()
             self.assertEqual(response.status_code, 400)
             data = json.loads(response.get_data(as_text=True))
@@ -192,7 +192,7 @@ class TestCustomerApi(TransactionCase):
         # Missing name
         payload = json.dumps({'phone': '08123456789'}).encode('utf-8')
         mock_req = self._mock_request(user=self.admin_user, method='POST', data=payload)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
             response = self.controller.create_customer()
             self.assertEqual(response.status_code, 400)
             data = json.loads(response.get_data(as_text=True))
@@ -201,7 +201,7 @@ class TestCustomerApi(TransactionCase):
         # Missing phone
         payload = json.dumps({'name': 'Pelanggan Baru'}).encode('utf-8')
         mock_req = self._mock_request(user=self.admin_user, method='POST', data=payload)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
             response = self.controller.create_customer()
             self.assertEqual(response.status_code, 400)
             data = json.loads(response.get_data(as_text=True))
@@ -217,7 +217,7 @@ class TestCustomerApi(TransactionCase):
             'city': 'Surabaya'
         }).encode('utf-8')
         mock_req = self._mock_request(user=self.admin_user, method='POST', data=payload)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
             response = self.controller.create_customer()
             self.assertEqual(response.status_code, 201)
             data = json.loads(response.get_data(as_text=True))
@@ -255,7 +255,7 @@ class TestCustomerApi(TransactionCase):
         for invalid_name in ['', '   ', '\t\n', '989', '12345', 'Budi 123', '@@@']:
             payload = json.dumps({'name': invalid_name, 'phone': '08123456789'}).encode('utf-8')
             mock_req = self._mock_request(user=self.admin_user, method='POST', data=payload)
-            with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+            with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
                 response = self.controller.create_customer()
                 self.assertEqual(response.status_code, 400, f"Expected 400 for invalid name: {invalid_name}")
                 data = json.loads(response.get_data(as_text=True))
@@ -267,7 +267,7 @@ class TestCustomerApi(TransactionCase):
         for invalid_phone in ['', '   ', '\t\n']:
             payload = json.dumps({'name': 'Budi Santoso', 'phone': invalid_phone}).encode('utf-8')
             mock_req = self._mock_request(user=self.admin_user, method='POST', data=payload)
-            with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+            with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
                 response = self.controller.create_customer()
                 self.assertEqual(response.status_code, 400)
                 data = json.loads(response.get_data(as_text=True))
@@ -291,7 +291,7 @@ class TestCustomerApi(TransactionCase):
         for body in invalid_payloads:
             payload = json.dumps(body).encode('utf-8')
             mock_req = self._mock_request(user=self.admin_user, method='POST', data=payload)
-            with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+            with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
                 response = self.controller.create_customer()
                 self.assertEqual(response.status_code, 400, f"Expected 400 for payload: {body}")
                 data = json.loads(response.get_data(as_text=True))
@@ -319,7 +319,7 @@ class TestCustomerApi(TransactionCase):
         for bad_phone in invalid_phones:
             payload = json.dumps({'name': 'Budi Santoso', 'phone': bad_phone}).encode('utf-8')
             mock_req = self._mock_request(user=self.admin_user, method='POST', data=payload)
-            with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+            with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
                 response = self.controller.create_customer()
                 self.assertEqual(response.status_code, 400, f"Expected 400 for invalid phone: {bad_phone}")
                 data = json.loads(response.get_data(as_text=True))
@@ -342,7 +342,7 @@ class TestCustomerApi(TransactionCase):
                 'phone': valid_phone,
             }).encode('utf-8')
             mock_req = self._mock_request(user=self.admin_user, method='POST', data=payload)
-            with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+            with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
                 response = self.controller.create_customer()
                 self.assertEqual(response.status_code, 201, f"Expected 201 for valid phone: {valid_phone}")
                 data = json.loads(response.get_data(as_text=True))
@@ -352,7 +352,7 @@ class TestCustomerApi(TransactionCase):
     def test_18_delete_customer_unauthorized(self):
         """Test that unauthenticated request to delete customer returns 401."""
         mock_req = self._mock_request(user=None, method='DELETE')
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
             response = self.controller.delete_customer(customer_id="1")
             self.assertEqual(response.status_code, 401)
             data = json.loads(response.get_data(as_text=True))
@@ -362,14 +362,14 @@ class TestCustomerApi(TransactionCase):
         """Test deleting customer with invalid ID returns 400 and non-existent ID returns 404."""
         for bad_id in ["abc", "-5", "0"]:
             mock_req = self._mock_request(user=self.admin_user, method='DELETE')
-            with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+            with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
                 response = self.controller.delete_customer(customer_id=bad_id)
                 self.assertEqual(response.status_code, 400)
                 data = json.loads(response.get_data(as_text=True))
                 self.assertIs(data.get('success'), False)
 
         mock_req = self._mock_request(user=self.admin_user, method='DELETE')
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
             response = self.controller.delete_customer(customer_id="99999999")
             self.assertEqual(response.status_code, 404)
             data = json.loads(response.get_data(as_text=True))
@@ -383,13 +383,13 @@ class TestCustomerApi(TransactionCase):
             'phone': '081299887766',
         }).encode('utf-8')
         mock_req_create = self._mock_request(user=self.admin_user, method='POST', data=payload)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_create):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req_create):
             create_resp = self.controller.create_customer()
             self.assertEqual(create_resp.status_code, 201)
             created_id = json.loads(create_resp.get_data(as_text=True))['data']['id']
 
         mock_req_del = self._mock_request(user=self.admin_user, method='DELETE')
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_del):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req_del):
             del_resp = self.controller.delete_customer(customer_id=str(created_id))
             self.assertEqual(del_resp.status_code, 200)
             del_data = json.loads(del_resp.get_data(as_text=True))
@@ -403,7 +403,7 @@ class TestCustomerApi(TransactionCase):
             'phone': '  +6281398765432  ',
         }).encode('utf-8')
         mock_req = self._mock_request(user=self.admin_user, method='POST', data=payload)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
             response = self.controller.create_customer()
             self.assertEqual(response.status_code, 201)
             body = json.loads(response.get_data(as_text=True))
@@ -427,7 +427,7 @@ class TestCustomerApi(TransactionCase):
             'phone': '081277665544',
         }).encode('utf-8')
         mock_req = self._mock_request(user=self.admin_user, method='POST', data=initial_payload)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
             resp = self.controller.create_customer()
             self.assertEqual(resp.status_code, 201)
             created_customer = json.loads(resp.get_data(as_text=True))['data']
@@ -448,7 +448,7 @@ class TestCustomerApi(TransactionCase):
                 'phone': dup_phone,
             }).encode('utf-8')
             mock_req_dup = self._mock_request(user=self.admin_user, method='POST', data=dup_payload)
-            with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_dup):
+            with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req_dup):
                 dup_resp = self.controller.create_customer()
                 self.assertEqual(dup_resp.status_code, 409, f"Expected 409 Conflict for duplicate phone: {dup_phone}")
                 dup_data = json.loads(dup_resp.get_data(as_text=True))
@@ -463,7 +463,7 @@ class TestCustomerApi(TransactionCase):
             'phone': '081266554433',
         }).encode('utf-8')
         mock_req = self._mock_request(user=self.admin_user, method='POST', data=payload)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req), \
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req), \
              patch.object(type(self.env['res.partner']), 'check_access', side_effect=AccessError('Denied')):
             response = self.controller.create_customer()
             self.assertEqual(response.status_code, 403)
@@ -487,8 +487,8 @@ class TestCustomerApi(TransactionCase):
         )
         mock_store_empty = MagicMock()
         mock_store_empty.get.return_value = None
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_invalid), \
-             patch('odoo.addons.laundryflow_backend.controllers.main.session_store', return_value=mock_store_empty):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req_invalid), \
+             patch('odoo.addons.laundryflow_backend.controllers.customer_controller.session_store', return_value=mock_store_empty):
             resp_invalid = self.controller.create_customer()
             self.assertEqual(resp_invalid.status_code, 401)
             data_invalid = json.loads(resp_invalid.get_data(as_text=True))
@@ -503,8 +503,8 @@ class TestCustomerApi(TransactionCase):
         )
         mock_store_valid = MagicMock()
         mock_store_valid.get.return_value = {'uid': self.admin_user.id}
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_valid), \
-             patch('odoo.addons.laundryflow_backend.controllers.main.session_store', return_value=mock_store_valid):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req_valid), \
+             patch('odoo.addons.laundryflow_backend.controllers.customer_controller.session_store', return_value=mock_store_valid):
             resp_valid = self.controller.create_customer()
             self.assertEqual(resp_valid.status_code, 201)
             data_valid = json.loads(resp_valid.get_data(as_text=True))
@@ -515,7 +515,7 @@ class TestCustomerApi(TransactionCase):
         """Test OPTIONS preflight, CORS headers, and consistent success/error JSON structure."""
         # 1. OPTIONS preflight
         mock_req_opt = self._mock_request(user=None, method='OPTIONS')
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_opt):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req_opt):
             resp_opt = self.controller.create_customer()
             self.assertEqual(resp_opt.status_code, 200)
             self.assertEqual(resp_opt.headers.get('Access-Control-Allow-Origin'), '*')
@@ -530,7 +530,7 @@ class TestCustomerApi(TransactionCase):
             'email': 'bukan-format-email',
         }).encode('utf-8')
         mock_req_err = self._mock_request(user=self.admin_user, method='POST', data=bad_email_payload)
-        with patch('odoo.addons.laundryflow_backend.controllers.main.request', mock_req_err):
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req_err):
             resp_err = self.controller.create_customer()
             self.assertEqual(resp_err.status_code, 400)
             self.assertIn('application/json', resp_err.headers.get('Content-Type', ''))
