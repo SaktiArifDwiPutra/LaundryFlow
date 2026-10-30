@@ -2,7 +2,6 @@ import '../models/auth_user.dart';
 import 'auth_repository.dart';
 
 class MockAuthRepository implements AuthRepository {
-  // Akun PALSU, hanya untuk mock. Jangan pernah menaruh akun asli di kode.
   static const _mockLogin = 'staf';
   static const _mockPassword = 'staf123';
 
@@ -20,7 +19,6 @@ class MockAuthRepository implements AuthRepository {
       throw const AuthException('Username atau password salah');
     }
 
-    // Bentuk sama dengan respons backend sungguhan (lihat docs/api).
     final Map<String, dynamic> response = {
       'success': true,
       'message': 'Login berhasil',

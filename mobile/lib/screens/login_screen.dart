@@ -40,7 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _password.text,
       );
       if (!mounted) return;
-      currentUser.value = user; // layar login otomatis diganti beranda
+      currentUser.value = user;
     } on AuthException catch (e) {
       if (!mounted) return;
       setState(() => _error = e.message);

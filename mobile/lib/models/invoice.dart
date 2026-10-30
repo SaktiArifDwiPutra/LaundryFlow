@@ -10,8 +10,6 @@ class Invoice {
 
   final int id;
   final String number;
-
-  /// Nilai mentah dari backend. Daftar nilai yang sebenarnya belum dikonfirmasi.
   final String state;
   final String paymentState;
   final int total;
@@ -35,7 +33,6 @@ class Invoice {
         _ => paymentState.isEmpty ? '-' : paymentState,
       };
 
-  /// Bentuk sama dengan GET /orders/{id}/invoice di catatan API.
   factory Invoice.fromJson(Map<String, dynamic> json) {
     return Invoice(
       id: json['id'] as int,

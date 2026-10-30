@@ -4,7 +4,6 @@ import '../config.dart';
 import '../models/auth_user.dart';
 import 'auth_repository.dart';
 
-/// Login lewat POST /api/laundry/auth/login (lihat docs/api).
 class OdooAuthRepository implements AuthRepository {
   OdooAuthRepository(this._api);
 
@@ -36,7 +35,6 @@ class OdooAuthRepository implements AuthRepository {
 
   @override
   Future<void> logout() async {
-    // Endpoint logout belum terlihat di backend, jadi hanya sesi lokal dihapus.
     _api.sessionId = null;
   }
 }

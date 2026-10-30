@@ -358,9 +358,6 @@ class _StageProgress extends StatelessWidget {
     );
   }
 }
-
-/// Dialog ubah pilihan ambil/antar. Pemilik controller-nya dialog ini sendiri,
-/// jadi dibuang dengan benar saat dialog tertutup.
 class _FulfillmentDialog extends StatefulWidget {
   const _FulfillmentDialog({required this.order});
 

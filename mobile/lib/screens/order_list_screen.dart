@@ -17,11 +17,10 @@ class OrderListScreen extends StatefulWidget {
 
 class _OrderListScreenState extends State<OrderListScreen> {
   final _search = TextEditingController();
-  OrderStatus? _status; // null = semua status
+  OrderStatus? _status;
   String _query = '';
   late Future<List<Order>> _future;
 
-  /// Status yang bisa dipilih sebagai filter (tanpa "unknown").
   static final _filters =
       OrderStatus.values.where((s) => s != OrderStatus.unknown).toList();
 
@@ -77,7 +76,6 @@ class _OrderListScreenState extends State<OrderListScreen> {
       MaterialPageRoute(builder: (_) => const NewOrderScreen()),
     );
     if (created == null || !mounted) return;
-    // Reset filter supaya pesanan baru pasti kelihatan.
     _status = null;
     _search.clear();
     _query = '';

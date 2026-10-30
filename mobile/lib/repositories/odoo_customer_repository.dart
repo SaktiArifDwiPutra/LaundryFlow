@@ -2,10 +2,6 @@ import '../api/api_client.dart';
 import '../api/api_exception.dart';
 import '../models/customer.dart';
 import 'customer_repository.dart';
-
-/// Pelanggan lewat backend Odoo:
-/// - cari   : GET  /api/laundry/customers/search
-/// - tambah : POST /api/laundry/customers
 class OdooCustomerRepository implements CustomerRepository {
   OdooCustomerRepository(this._api);
 
@@ -14,7 +10,7 @@ class OdooCustomerRepository implements CustomerRepository {
   @override
   Future<List<Customer>> list({String q = ''}) async {
     final query = q.trim();
-    if (query.isEmpty) return const []; // backend menolak kata kunci kosong
+    if (query.isEmpty) return const [];
     final Map<String, dynamic> json;
     try {
       json = await _api.get(
@@ -22,8 +18,6 @@ class OdooCustomerRepository implements CustomerRepository {
         query: {'q': query, 'limit': '20'},
       );
     } on ApiException catch (e) {
-      // Backend membalas 404 saat hasil kosong. Anggap saja daftar kosong.
-      // Hapus blok ini kalau backend sudah diubah jadi 200 + daftar kosong.
       if (e.statusCode == 404) return const [];
       rethrow;
     }

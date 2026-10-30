@@ -5,7 +5,6 @@ abstract class AuthRepository {
   Future<void> logout();
 }
 
-/// Dilempar saat login gagal; [message] aman ditampilkan ke staf.
 class AuthException implements Exception {
   const AuthException(this.message);
 

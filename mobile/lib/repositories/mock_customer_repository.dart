@@ -22,7 +22,7 @@ class MockCustomerRepository implements CustomerRepository {
         )
         .toList()
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    return result.take(20).toList(); // limit bawaan backend
+    return result.take(20).toList();
   }
 
   @override
