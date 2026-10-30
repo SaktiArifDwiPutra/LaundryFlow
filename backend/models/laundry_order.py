@@ -5,7 +5,7 @@ from odoo.exceptions import ValidationError
 class LaundryOrder(models.Model):
     _name = "laundry.order"
     _description = "Pesanan Laundry"
-    _order = "create_date desc, id desc"
+    _order = "order_date desc, create_date desc, id desc"
 
     name = fields.Char(
         string="Nomor Pesanan",
@@ -18,11 +18,42 @@ class LaundryOrder(models.Model):
         "res.partner",
         string="Pelanggan",
         required=True,
+        index=True,
+    )
+    order_date = fields.Datetime(
+        string="Tanggal Pesanan",
+        default=fields.Datetime.now,
+        required=True,
+        copy=False,
+        index=True,
+        help="Tanggal dan waktu pesanan laundry diterima.",
+    )
+    service_speed = fields.Selection(
+        [
+            ("regular", "Reguler"),
+            ("same_day", "Same Day Service"),
+        ],
+        string="Jenis Pengerjaan",
+        required=True,
+        default="regular",
+        help="Pilihan kecepatan pengerjaan pesanan: Reguler atau Same Day Service.",
+    )
+    user_id = fields.Many2one(
+        "res.users",
+        string="Pegawai / Operator",
+        default=lambda self: self.env.user,
+        index=True,
+        help="Pegawai atau operator yang menangani pesanan.",
     )
     line_ids = fields.One2many(
         "laundry.order.line",
         "order_id",
         string="Detail Layanan",
+        copy=True,
+    )
+    item_details = fields.Text(
+        string="Detail Barang",
+        help="Catatan keseluruhan rincian pakaian/barang pelanggan (misal: 5 kemeja, 3 celana, 1 sprei).",
     )
     service_type = fields.Selection(
         [
@@ -36,7 +67,7 @@ class LaundryOrder(models.Model):
         default="wash_fold",
     )
     weight = fields.Float(
-        string="Berat (kg)",
+        string="Berat Total (kg)",
         compute="_compute_weight",
         precompute=True,
         store=True,
@@ -74,6 +105,7 @@ class LaundryOrder(models.Model):
         string="Status",
         required=True,
         default="received",
+        index=True,
     )
     invoice_id = fields.Many2one(
         "account.move",
@@ -149,6 +181,16 @@ class LaundryOrderLine(models.Model):
             return "set"
         return "unit"
 
+    @api.model
+    def _get_uom_category_or_root(self, uom):
+        if not uom:
+            return None
+        if hasattr(uom, "category_id") and uom.category_id:
+            return uom.category_id.id
+        if hasattr(uom, "parent_path") and uom.parent_path:
+            return uom.parent_path.split("/")[0]
+        return uom.id
+
     order_id = fields.Many2one(
         "laundry.order",
         string="Pesanan",
@@ -172,6 +214,18 @@ class LaundryOrderLine(models.Model):
     name = fields.Char(
         string="Deskripsi Layanan",
     )
+    item_details = fields.Text(
+        string="Detail Barang",
+        help="Rincian pakaian atau barang pada detail layanan ini (misal: 3 kemeja katun, 2 celana jeans).",
+    )
+    user_id = fields.Many2one(
+        "res.users",
+        string="Pegawai Penangan",
+        related="order_id.user_id",
+        store=True,
+        readonly=False,
+        help="Pegawai yang menangani detail layanan ini.",
+    )
     pricing_type = fields.Selection(
         [
             ("weight", "Per Kg (Berat)"),
@@ -193,6 +247,7 @@ class LaundryOrderLine(models.Model):
         precompute=True,
         store=True,
         readonly=False,
+        required=True,
     )
 
     # Dimensi untuk Luas (Karpet / m²) - Ketentuan 1, 2, 3, 4
@@ -219,11 +274,20 @@ class LaundryOrderLine(models.Model):
 
     # Jumlah / Kuantitas (kg / pcs / set / helai karpet)
     quantity = fields.Float(
-        string="Jumlah / Berat",
+        string="Jumlah / Kuantitas",
         digits=(12, 2),
         default=1.0,
         required=True,
         help="Berat (kg) jika per kg, jumlah (pcs) jika per pcs, jumlah set jika per set, atau jumlah helai jika per m².",
+    )
+    weight = fields.Float(
+        string="Berat (kg)",
+        digits=(12, 2),
+        compute="_compute_line_weight",
+        precompute=True,
+        store=True,
+        readonly=False,
+        help="Berat barang dalam kg (khusus layanan per berat/kg).",
     )
 
     # Snapshot Harga - Ketentuan 9 & 10
@@ -249,6 +313,14 @@ class LaundryOrderLine(models.Model):
     )
     notes = fields.Char(string="Catatan")
 
+    @api.depends("quantity", "pricing_type")
+    def _compute_line_weight(self):
+        for line in self:
+            if line.pricing_type == "weight":
+                line.weight = line.quantity or 0.0
+            else:
+                line.weight = 0.0
+
     @api.depends("product_template_id")
     def _compute_product_id(self):
         for line in self:
@@ -270,7 +342,7 @@ class LaundryOrderLine(models.Model):
     @api.depends("product_template_id")
     def _compute_uom_id(self):
         for line in self:
-            if line.product_template_id:
+            if line.product_template_id and not line.uom_id:
                 line.uom_id = line.product_template_id.uom_id
 
     @api.depends("length", "width", "pricing_type")
@@ -293,7 +365,6 @@ class LaundryOrderLine(models.Model):
             return 0.0
         raw_area = length * width
 
-        # Dukung get_str (Odoo 20) maupun get_param (legacy)
         param_obj = self.env["ir.config_parameter"].sudo()
         if hasattr(param_obj, "get_str"):
             rounding_method = param_obj.get_str("laundry.area_rounding_method", "none")
@@ -318,7 +389,7 @@ class LaundryOrderLine(models.Model):
     @api.depends("pricing_type", "quantity", "area", "price_unit", "length", "width")
     def _compute_subtotal(self):
         """
-        Perhitungan harga backend (Ketentuan 7 & 8):
+        Perhitungan harga backend:
         - A. BERDASARKAN KG: Total = berat × harga per kg
         - B. BERDASARKAN PCS: Total = jumlah × harga per pcs
         - C. BERDASARKAN SET: Total = jumlah set × harga per set
@@ -369,16 +440,45 @@ class LaundryOrderLine(models.Model):
         for line in lines:
             line._compute_area()
             line._compute_subtotal()
+            line._compute_line_weight()
         return lines
+
+    @api.constrains("product_template_id")
+    def _check_product_service(self):
+        for line in self:
+            if not line.product_template_id:
+                raise ValidationError(_("Setiap detail pesanan wajib terhubung ke produk Odoo."))
+            if line.product_template_id.type != "service":
+                raise ValidationError(_(
+                    "Produk '%(product)s' bukan merupakan produk layanan laundry (tipe produk harus 'service').",
+                    product=line.product_template_id.name,
+                ))
+
+    @api.constrains("product_template_id", "uom_id")
+    def _check_uom_compatibility(self):
+        for line in self:
+            if not line.uom_id:
+                raise ValidationError(_("Satuan (UoM) wajib diisi untuk setiap detail layanan."))
+            if line.product_template_id and line.product_template_id.uom_id:
+                prod_uom = line.product_template_id.uom_id
+                if line.uom_id.id != prod_uom.id:
+                    line_root = self._get_uom_category_or_root(line.uom_id)
+                    prod_root = self._get_uom_category_or_root(prod_uom)
+                    if line_root != prod_root:
+                        raise ValidationError(_(
+                            "Satuan '%(uom)s' tidak kompatibel dengan produk layanan '%(product)s'.",
+                            uom=line.uom_id.name,
+                            product=line.product_template_id.name,
+                        ))
 
     @api.constrains("pricing_type", "length", "width")
     def _check_area_dimensions(self):
         for line in self:
             if line.pricing_type == "area":
                 if line.length <= 0:
-                    raise ValidationError(_("Panjang karpet harus berupa angka positif lebih dari 0 meter."))
+                    raise ValidationError(_("Detail karpet wajib memiliki panjang berupa angka positif lebih dari 0 meter."))
                 if line.width <= 0:
-                    raise ValidationError(_("Lebar karpet harus berupa angka positif lebih dari 0 meter."))
+                    raise ValidationError(_("Detail karpet wajib memiliki lebar berupa angka positif lebih dari 0 meter."))
 
     @api.constrains("pricing_type", "quantity")
     def _check_quantity(self):
