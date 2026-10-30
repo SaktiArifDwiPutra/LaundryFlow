@@ -171,3 +171,4 @@ class LaundryInventoryController(BaseApiController):
 
         data = self._serialize_product_inventory(product, internal_locations, req)
         return self._json_response({'data': data}, status=200)
+

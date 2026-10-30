@@ -214,3 +214,4 @@ class TestInventoryApi(TransactionCase):
             ('categ_id.name', '=', 'Bahan Laundry')
         ], limit=1)
         self.assertFalse(non_existent)
+
