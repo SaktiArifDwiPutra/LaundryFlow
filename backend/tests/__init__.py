@@ -3,3 +3,4 @@ from . import test_api_docs
 from . import test_product_api
 from . import test_laundry_pricing
 from . import test_laundry_order
+from . import test_service_speed

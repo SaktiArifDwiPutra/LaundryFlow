@@ -63,6 +63,10 @@ class ApiDocsController(http.Controller):
                     "name": "Products",
                     "description": "Pengambilan data katalog produk dan layanan laundry (`product.template`).",
                 },
+                {
+                    "name": "Orders",
+                    "description": "Pengelolaan opsi pesanan, kecepatan pengerjaan (Reguler & Same Day Service), dan order laundry (`laundry.order`).",
+                },
             ],
             "paths": {
                 "/api/laundry/auth/login": {
@@ -913,6 +917,63 @@ class ApiDocsController(http.Controller):
                             },
                             "422": {
                                 "description": "Data produk memiliki harga atau satuan yang tidak valid.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                                    }
+                                },
+                            },
+                        },
+                    }
+                },
+                "/api/laundry/service-speeds": {
+                    "get": {
+                        "tags": ["Orders"],
+                        "summary": "Daftar Opsi Kecepatan Pengerjaan",
+                        "operationId": "getServiceSpeeds",
+                        "description": (
+                            "Mengambil daftar pilihan kecepatan pengerjaan pesanan laundry yang tersedia (Reguler dan Same Day Service).\n\n"
+                            "**Aturan Bisnis & Operasional:**\n"
+                            "- Pelanggan dapat memilih antara `regular` (Reguler) atau `same_day` (Same Day Service).\n"
+                            "- Admin dapat mengatur ketersediaan Same Day melalui konfigurasi Odoo.\n"
+                            "- Jika Same Day tidak aktif, field `available` bernilai `false`.\n"
+                            "- Tarif biaya tambahan diambil dari konfigurasi Odoo (`0.0` jika belum ada tarif yang dikonfirmasi).\n\n"
+                            "**Route Alias yang Didukung:**\n"
+                            "- `GET /api/laundry/service-speeds`\n"
+                            "- `GET /api/laundry/orders/options`"
+                        ),
+                        "responses": {
+                            "200": {
+                                "description": "Daftar opsi kecepatan pengerjaan berhasil diambil.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "required": ["success", "count", "data"],
+                                            "properties": {
+                                                "success": {"type": "boolean", "example": True},
+                                                "count": {"type": "integer", "example": 2},
+                                                "data": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "required": ["code", "name", "available", "fee", "description"],
+                                                        "properties": {
+                                                            "code": {"type": "string", "example": "same_day"},
+                                                            "name": {"type": "string", "example": "Same Day Service"},
+                                                            "available": {"type": "boolean", "example": True},
+                                                            "fee": {"type": "number", "example": 0.0},
+                                                            "description": {"type": "string", "example": "Pengerjaan prioritas selesai di hari yang sama"},
+                                                        },
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    }
+                                },
+                            },
+                            "401": {
+                                "description": "Autentikasi gagal atau sesi tidak valid.",
                                 "content": {
                                     "application/json": {
                                         "schema": {"$ref": "#/components/schemas/ErrorResponse"},

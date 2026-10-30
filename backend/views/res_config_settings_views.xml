@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.laundry</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="45"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="LaundryFlow" string="LaundryFlow" name="laundryflow_backend">
+                    <block title="Pilihan Pengerjaan (Service Speed)" name="service_speed_settings">
+                        <setting id="laundry_same_day_setting" string="Same Day Service" help="Atur ketersediaan dan tarif tambahan Same Day Service bagi pelanggan.">
+                            <field name="laundry_same_day_available"/>
+                            <div class="mt8" invisible="not laundry_same_day_available">
+                                <label for="laundry_same_day_surcharge" string="Biaya Tambahan Same Day"/>
+                                <field name="laundry_same_day_surcharge" class="oe_inline"/>
+                                <field name="currency_id" invisible="1"/>
+                            </div>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_laundry_config_settings" model="ir.actions.act_window">
+        <field name="name">Pengaturan LaundryFlow</field>
+        <field name="res_model">res.config.settings</field>
+        <field name="view_mode">form</field>
+        <field name="context">{'module': 'laundryflow_backend'}</field>
+    </record>
+
+    <menuitem id="menu_laundry_config"
+              name="Konfigurasi"
+              parent="menu_laundry_root"
+              sequence="90"/>
+
+    <menuitem id="menu_laundry_settings"
+              name="Pengaturan"
+              parent="menu_laundry_config"
+              action="action_laundry_config_settings"
+              sequence="10"/>
+</odoo>

@@ -36,7 +36,14 @@ class LaundryOrder(models.Model):
         string="Jenis Pengerjaan",
         required=True,
         default="regular",
+        index=True,
         help="Pilihan kecepatan pengerjaan pesanan: Reguler atau Same Day Service.",
+    )
+    service_speed_fee = fields.Monetary(
+        string="Biaya Jenis Pengerjaan",
+        currency_field="currency_id",
+        default=0.0,
+        help="Snapshot biaya tambahan jenis pengerjaan (misal Same Day Service) saat transaksi dibuat. Perubahan konfigurasi di masa depan tidak mempengaruhi transaksi lama.",
     )
     user_id = fields.Many2one(
         "res.users",
@@ -114,14 +121,116 @@ class LaundryOrder(models.Model):
         copy=False,
     )
 
-    @api.depends("line_ids.subtotal", "weight", "price_per_kg")
+    # -------------------------------------------------------------------------
+    # Konfigurasi Same Day Service (Ketentuan 3, 7, 8)
+    # -------------------------------------------------------------------------
+    @api.model
+    def is_same_day_available(self):
+        """
+        Mengecek apakah Same Day Service sedang dibuka oleh admin/operasional.
+        Default: True.
+        """
+        param_obj = self.env["ir.config_parameter"].sudo()
+        if hasattr(param_obj, "get_bool"):
+            return param_obj.get_bool("laundry.same_day_available", default=True)
+        elif hasattr(param_obj, "get_param"):
+            val = param_obj.get_param("laundry.same_day_available", "True")
+        else:
+            rec = param_obj.search([("key", "=", "laundry.same_day_available")], limit=1)
+            val = rec.value if rec else "True"
+        return str(val).lower() in ("true", "1", "t", "yes")
+
+    @api.model
+    def get_same_day_surcharge(self):
+        """
+        Mengambil tarif biaya tambahan Same Day Service dari konfigurasi Odoo.
+        Ketentuan 7 & 8:
+        - Jangan menambahkan biaya tambahan sebelum tarif dikonfirmasi.
+        - Jika biaya tambahan tersedia, ambil dari konfigurasi Odoo.
+        Default: 0.0 jika belum ada tarif yang dikonfirmasi.
+        """
+        param_obj = self.env["ir.config_parameter"].sudo()
+        if hasattr(param_obj, "get_float"):
+            return param_obj.get_float("laundry.same_day_surcharge", default=0.0)
+        elif hasattr(param_obj, "get_param"):
+            val = param_obj.get_param("laundry.same_day_surcharge", 0.0)
+        else:
+            rec = param_obj.search([("key", "=", "laundry.same_day_surcharge")], limit=1)
+            val = rec.value if rec else 0.0
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return 0.0
+
+    @api.model
+    def set_same_day_config(self, available=True, surcharge=0.0):
+        """
+        Helper method untuk admin mengonfigurasi ketersediaan dan biaya Same Day Service.
+        """
+        param_obj = self.env["ir.config_parameter"].sudo()
+        if hasattr(param_obj, "set_bool"):
+            param_obj.set_bool("laundry.same_day_available", bool(available))
+        elif hasattr(param_obj, "set_param"):
+            param_obj.set_param("laundry.same_day_available", str(bool(available)))
+        else:
+            rec = param_obj.search([("key", "=", "laundry.same_day_available")], limit=1)
+            if rec:
+                rec.value = str(bool(available))
+            else:
+                param_obj.create({"key": "laundry.same_day_available", "value": str(bool(available))})
+
+        if hasattr(param_obj, "set_float"):
+            param_obj.set_float("laundry.same_day_surcharge", float(surcharge))
+        elif hasattr(param_obj, "set_param"):
+            param_obj.set_param("laundry.same_day_surcharge", str(float(surcharge)))
+        else:
+            rec = param_obj.search([("key", "=", "laundry.same_day_surcharge")], limit=1)
+            if rec:
+                rec.value = str(float(surcharge))
+            else:
+                param_obj.create({"key": "laundry.same_day_surcharge", "value": str(float(surcharge))})
+        return True
+
+    @api.model
+    def get_available_service_speeds(self):
+        """
+        Mengembalikan opsi kecepatan pengerjaan untuk aplikasi klien (Flutter).
+        Ketentuan 1, 3, 4, 6:
+        - Pelanggan dapat memilih Reguler atau Same Day.
+        - Flutter menampilkan pilihan yang tersedia berdasarkan status ketersediaan saat ini.
+        - Tanpa menjanjikan estimasi waktu selesai fiktif jika aturan operasional belum ditentukan.
+        """
+        same_day_active = self.is_same_day_available()
+        surcharge = self.get_same_day_surcharge() if same_day_active else 0.0
+        return [
+            {
+                "code": "regular",
+                "name": "Reguler",
+                "available": True,
+                "fee": 0.0,
+                "description": "Pengerjaan standar reguler",
+            },
+            {
+                "code": "same_day",
+                "name": "Same Day Service",
+                "available": same_day_active,
+                "fee": surcharge,
+                "description": "Pengerjaan prioritas selesai di hari yang sama",
+            },
+        ]
+
+    # -------------------------------------------------------------------------
+    # Perhitungan Total & Berat (Ketentuan 5, 9, 10)
+    # -------------------------------------------------------------------------
+    @api.depends("line_ids.subtotal", "service_speed_fee", "weight", "price_per_kg")
     def _compute_total_amount(self):
         for order in self:
+            speed_fee = order.service_speed_fee or 0.0
             if order.line_ids:
-                order.total_amount = sum(order.line_ids.mapped("subtotal"))
+                order.total_amount = sum(order.line_ids.mapped("subtotal")) + speed_fee
             else:
                 # Kompatibilitas mundur dengan transaksi legacy tunggal
-                order.total_amount = (order.weight or 0.0) * (order.price_per_kg or 0.0)
+                order.total_amount = ((order.weight or 0.0) * (order.price_per_kg or 0.0)) + speed_fee
 
     @api.depends("line_ids.quantity", "line_ids.pricing_type")
     def _compute_weight(self):
@@ -139,24 +248,82 @@ class LaundryOrder(models.Model):
                 if order.price_per_kg < 0:
                     raise ValidationError(_("Harga per kg tidak boleh negatif."))
 
+    @api.constrains("service_speed")
+    def _check_service_speed_selection(self):
+        for order in self:
+            if order.service_speed not in ("regular", "same_day"):
+                raise ValidationError(_(
+                    "Pilihan jenis pengerjaan '%(speed)s' tidak valid. "
+                    "Pilihan yang tersedia: Reguler (regular) atau Same Day Service (same_day).",
+                    speed=order.service_speed,
+                ))
+
     @api.model_create_multi
     def create(self, vals_list):
         sequence = self.env["ir.sequence"]
         for vals in vals_list:
             if vals.get("name", "New") == "New":
                 vals["name"] = sequence.next_by_code("laundry.order") or "New"
+
+            # Validasi jenis pengerjaan (Ketentuan 1, 2, 5)
+            speed = vals.get("service_speed", "regular")
+            if speed not in ("regular", "same_day"):
+                raise ValidationError(_(
+                    "Pilihan jenis pengerjaan '%(speed)s' tidak valid. "
+                    "Pilihan yang tersedia: Reguler (regular) atau Same Day Service (same_day).",
+                    speed=speed,
+                ))
+
+            if speed == "same_day":
+                if not self.is_same_day_available():
+                    raise ValidationError(_("Layanan Same Day Service sedang tidak tersedia saat ini."))
+                # Snapshot tarif biaya tambahan dari konfigurasi Odoo (Ketentuan 7, 8, 9)
+                if "service_speed_fee" not in vals or vals.get("service_speed_fee") is None:
+                    vals["service_speed_fee"] = self.get_same_day_surcharge()
+            elif speed == "regular":
+                if "service_speed_fee" not in vals or vals.get("service_speed_fee") is None:
+                    vals["service_speed_fee"] = 0.0
+
             # Backend menghitung ulang: jangan mempercayai total_amount dari payload klien
             if "total_amount" in vals and ("line_ids" in vals or vals.get("line_ids")):
                 vals.pop("total_amount", None)
+
         orders = super().create(vals_list)
         for order in orders:
             order._compute_weight()
             order._compute_total_amount()
         return orders
 
+    def write(self, vals):
+        if "service_speed" in vals:
+            speed = vals.get("service_speed")
+            if speed not in ("regular", "same_day"):
+                raise ValidationError(_(
+                    "Pilihan jenis pengerjaan '%(speed)s' tidak valid. "
+                    "Pilihan yang tersedia: Reguler (regular) atau Same Day Service (same_day).",
+                    speed=speed,
+                ))
+            if speed == "same_day":
+                for order in self:
+                    # Validasi ketersediaan hanya jika pesanan sebelumnya bukan same_day
+                    if order.service_speed != "same_day" and not self.is_same_day_available():
+                        raise ValidationError(_("Layanan Same Day Service sedang tidak tersedia saat ini."))
+                if "service_speed_fee" not in vals:
+                    vals["service_speed_fee"] = self.get_same_day_surcharge()
+            elif speed == "regular":
+                if "service_speed_fee" not in vals:
+                    vals["service_speed_fee"] = 0.0
+
+        res = super().write(vals)
+        if "service_speed" in vals or "service_speed_fee" in vals:
+            for order in self:
+                order._compute_total_amount()
+        return res
+
     def recompute_prices(self):
         """
         Memaksa backend menghitung ulang semua subtotal dan total harga pesanan.
+        Perubahan konfigurasi tidak boleh mengubah order lama (Ketentuan 10).
         """
         for order in self:
             order.line_ids._compute_subtotal()
@@ -356,10 +523,6 @@ class LaundryOrderLine(models.Model):
     def _calculate_area(self, length, width):
         """
         Menghitung luas karpet dalam satuan meter persegi (m²).
-        Sesuai Ketentuan 5 & 6:
-        - Default: Luas = panjang × lebar (tanpa membuat aturan pembulatan sendiri, menunggu keputusan bisnis).
-        - Jika aturan pembulatan dikonfigurasi melalui ir.config_parameter (misal laundry.area_rounding_method),
-          sistem menerapkan konfigurasi tersebut.
         """
         if length <= 0 or width <= 0:
             return 0.0

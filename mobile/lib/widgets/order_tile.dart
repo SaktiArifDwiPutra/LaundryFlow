@@ -48,8 +48,8 @@ class OrderTile extends StatelessWidget {
               const SizedBox(height: 10),
               Row(
                 children: [
-                  if (order.priority == OrderPriority.express) ...[
-                    const PriorityBadge(),
+                  if (order.priority == OrderPriority.express || order.priority == OrderPriority.sameDay) ...[
+                    PriorityBadge(label: order.priority.label),
                     const SizedBox(width: 8),
                   ],
                   FulfillmentBadge(fulfillment: order.fulfillment),

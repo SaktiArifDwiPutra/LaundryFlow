@@ -9,6 +9,7 @@
                 <field name="order_date"/>
                 <field name="partner_id"/>
                 <field name="service_speed"/>
+                <field name="service_speed_fee" optional="show"/>
                 <field name="weight"/>
                 <field name="total_amount"/>
                 <field name="user_id" widget="many2one_avatar_user"/>
@@ -36,6 +37,7 @@
                             <field name="partner_id"/>
                             <field name="order_date"/>
                             <field name="service_speed"/>
+                            <field name="service_speed_fee" invisible="service_speed != 'same_day'"/>
                             <field name="user_id"/>
                         </group>
                         <group>

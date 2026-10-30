@@ -6,7 +6,9 @@ import '../models/order_status.dart';
 import '../utils/format.dart';
 
 class PriorityBadge extends StatelessWidget {
-  const PriorityBadge({super.key});
+  const PriorityBadge({super.key, this.label = 'Same Day'});
+
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -16,14 +18,14 @@ class PriorityBadge extends StatelessWidget {
         color: Colors.orange.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.bolt, size: 14, color: Colors.orange),
-          SizedBox(width: 2),
+          const Icon(Icons.bolt, size: 14, color: Colors.orange),
+          const SizedBox(width: 2),
           Text(
-            'Express',
-            style: TextStyle(
+            label,
+            style: const TextStyle(
               color: Colors.orange,
               fontSize: 12,
               fontWeight: FontWeight.w600,

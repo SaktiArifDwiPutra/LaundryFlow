@@ -16,6 +16,7 @@
         "data/sequence.xml",
         "data/product_data.xml",
         "views/laundry_order_views.xml",
+        "views/res_config_settings_views.xml",
     ],
     "installable": True,
     "application": True,
