@@ -7,7 +7,6 @@
             <list string="Pesanan Laundry">
                 <field name="name"/>
                 <field name="partner_id"/>
-                <field name="service_type"/>
                 <field name="weight"/>
                 <field name="total_amount"/>
                 <field name="state"/>
@@ -42,9 +41,27 @@
                             <field name="invoice_id"/>
                         </group>
                     </group>
-                    <group>
-                        <field name="notes"/>
-                    </group>
+                    <notebook>
+                        <page string="Detail Layanan">
+                            <field name="line_ids">
+                                <list editable="bottom">
+                                    <field name="product_template_id"/>
+                                    <field name="pricing_type"/>
+                                    <field name="length" invisible="pricing_type != 'area'"/>
+                                    <field name="width" invisible="pricing_type != 'area'"/>
+                                    <field name="area" invisible="pricing_type != 'area'"/>
+                                    <field name="quantity"/>
+                                    <field name="uom_id"/>
+                                    <field name="price_unit"/>
+                                    <field name="subtotal"/>
+                                    <field name="currency_id" column_invisible="True"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Catatan">
+                            <field name="notes"/>
+                        </page>
+                    </notebook>
                 </sheet>
             </form>
         </field>
