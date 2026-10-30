@@ -41,25 +41,25 @@ class LaundryInventoryController(BaseApiController):
 
         return user, None
 
-    def _get_internal_locations(self, req):
+    def _get_internal_locations(self, env):
         """Mengambil record lokasi internal gudang yang sah untuk perusahaan aktif."""
-        company_id = req.env.company.id
-        return req.env['stock.location'].search([
+        company_id = env.company.id
+        return env['stock.location'].search([
             ('usage', '=', 'internal'),
             ('company_id', 'in', (False, company_id))
         ])
 
-    def _serialize_product_inventory(self, product, internal_locations, req):
+    def _serialize_product_inventory(self, product, internal_locations, env):
         """Format data produk inventory dan seluruh batch-nya."""
         # Hitung stok aktual murni dari lokasi internal
-        quants = req.env['stock.quant'].search([
+        quants = env['stock.quant'].search([
             ('product_id', '=', product.id),
             ('location_id', 'in', internal_locations.ids)
         ])
         quantity_on_hand = sum(quants.mapped('quantity'))
 
         # Ambil seluruh batch/lot produk
-        lots = req.env['stock.lot'].search([
+        lots = env['stock.lot'].search([
             ('product_id', '=', product.id)
         ], order='expiration_date asc, id asc')
 
@@ -95,7 +95,7 @@ class LaundryInventoryController(BaseApiController):
     @http.route(
         ['/api/laundry/inventory', '/api/inventory'],
         type='http',
-        auth='none',
+        auth='public',
         methods=['GET', 'OPTIONS'],
         csrf=False,
         cors='*'
@@ -109,33 +109,40 @@ class LaundryInventoryController(BaseApiController):
         if req.httprequest.method == 'OPTIONS':
             return self._json_response({'status': 'ok'}, status=200)
 
-        user, error_response = self._check_inventory_access(req)
-        if error_response:
-            return error_response
+        try:
+            user, error_response = self._check_inventory_access(req)
+            if error_response:
+                return error_response
 
-        env = req.env(user=user)
-        internal_locations = self._get_internal_locations(req)
+            env = req.env(user=user)
+            internal_locations = self._get_internal_locations(env)
 
-        # Filter produk bahan laundry (Kategori: Bahan Laundry)
-        products = env['product.product'].search([
-            '|',
-            ('categ_id.name', '=', 'Bahan Laundry'),
-            ('categ_id.parent_id.name', '=', 'Bahan Laundry')
-        ], order='default_code asc, id asc')
+            # Filter produk bahan laundry (Kategori: Bahan Laundry)
+            products = env['product.product'].search([
+                '|',
+                ('categ_id.name', '=', 'Bahan Laundry'),
+                ('categ_id.parent_id.name', '=', 'Bahan Laundry')
+            ], order='default_code asc, id asc')
 
-        if not products:
-            return self._json_response({'data': []}, status=200)
+            if not products:
+                return self._json_response({'data': []}, status=200)
 
-        data = [
-            self._serialize_product_inventory(p, internal_locations, req)
-            for p in products
-        ]
-        return self._json_response({'data': data}, status=200)
+            data = [
+                self._serialize_product_inventory(p, internal_locations, env)
+                for p in products
+            ]
+            return self._json_response({'data': data}, status=200)
+        except Exception as e:
+            _logger.exception("Error in get_inventory_list: %s", str(e))
+            return self._json_response(
+                {'error': 'Internal Server Error', 'message': str(e)},
+                status=500
+            )
 
     @http.route(
         ['/api/laundry/inventory/<int:product_id>', '/api/inventory/<int:product_id>'],
         type='http',
-        auth='none',
+        auth='public',
         methods=['GET', 'OPTIONS'],
         csrf=False,
         cors='*'
@@ -149,26 +156,34 @@ class LaundryInventoryController(BaseApiController):
         if req.httprequest.method == 'OPTIONS':
             return self._json_response({'status': 'ok'}, status=200)
 
-        user, error_response = self._check_inventory_access(req)
-        if error_response:
-            return error_response
+        try:
+            user, error_response = self._check_inventory_access(req)
+            if error_response:
+                return error_response
 
-        env = req.env(user=user)
-        internal_locations = self._get_internal_locations(req)
+            env = req.env(user=user)
+            internal_locations = self._get_internal_locations(env)
 
-        product = env['product.product'].search([
-            ('id', '=', product_id),
-            '|',
-            ('categ_id.name', '=', 'Bahan Laundry'),
-            ('categ_id.parent_id.name', '=', 'Bahan Laundry')
-        ], limit=1)
+            product = env['product.product'].search([
+                '|',
+                ('id', '=', product_id),
+                ('product_tmpl_id', '=', product_id),
+                '|',
+                ('categ_id.name', '=', 'Bahan Laundry'),
+                ('categ_id.parent_id.name', '=', 'Bahan Laundry')
+            ], limit=1)
 
-        if not product:
+            if not product:
+                return self._json_response(
+                    {'error': 'Not Found', 'message': f'Bahan laundry dengan ID {product_id} tidak ditemukan.'},
+                    status=404
+                )
+
+            data = self._serialize_product_inventory(product, internal_locations, env)
+            return self._json_response({'data': data}, status=200)
+        except Exception as e:
+            _logger.exception("Error in get_inventory_detail: %s", str(e))
             return self._json_response(
-                {'error': 'Not Found', 'message': f'Bahan laundry dengan ID {product_id} tidak ditemukan.'},
-                status=404
+                {'error': 'Internal Server Error', 'message': str(e)},
+                status=500
             )
-
-        data = self._serialize_product_inventory(product, internal_locations, req)
-        return self._json_response({'data': data}, status=200)
-
