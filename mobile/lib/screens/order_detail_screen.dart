@@ -11,7 +11,6 @@ import '../widgets/invoice_section.dart';
 import '../widgets/order_badges.dart';
 import '../widgets/status_chip.dart';
 
-/// Hasil dialog "Ambil atau diantar?".
 class _FulfillmentChoice {
   const _FulfillmentChoice(this.fulfillment, this.address, this.fee);
 
