@@ -581,6 +581,50 @@
               ]
             }
           }
+        },
+        {
+          "name": "3.6 Perbarui / Tetapkan Harga Layanan (PUT /api/laundry/products/:id)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {\n    pm.response.to.have.status(200);\n});",
+                  "pm.test(\"Updated price reflected in response\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.success).to.be.true;\n    pm.expect(jsonData.data.unit_price).to.eql(8500);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 8500\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/products/11",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "products",
+                "11"
+              ]
+            }
+          }
         }
       ]
     },
@@ -1131,6 +1175,41 @@
               "mode": "raw",
               "raw": "{\n  \"partner_id\": \"{{customerId}}\",\n  \"service_speed\": \"regular\",\n  \"total_amount\": 100.0,\n  \"lines\": [\n    {\n      \"product_template_id\": \"{{serviceProductId}}\",\n      \"weight\": 5.0,\n      \"price_unit\": 10.0,\n      \"subtotal\": 50.0\n    }\n  ]\n}"
             },
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "orders"
+              ]
+            }
+          }
+        },
+        {
+          "name": "5.9 Daftar Pesanan Laundry (GET /api/laundry/orders)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {\n    pm.response.to.have.status(200);\n});",
+                  "pm.test(\"Orders list returned\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.success).to.be.true;\n    pm.expect(jsonData.data).to.be.an(\"array\");\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/laundry/orders",
               "host": [

@@ -323,6 +323,62 @@ class ApiDocsController(http.Controller):
                                 "content": {"application/json": {"example": {"success": False, "message": "Autentikasi diperlukan."}}}
                             }
                         }
+                    },
+                    "put": {
+                        "tags": ["Products"],
+                        "summary": "Perbarui Harga / Data Layanan Laundry",
+                        "operationId": "updateProduct",
+                        "description": "Memperbarui harga jual (`list_price`), nama, deskripsi, atau status layanan laundry di Odoo oleh Admin/Staff.",
+                        "security": [{"BearerAuth": []}, {"SessionHeaderAuth": []}],
+                        "parameters": [
+                            {"name": "product_id", "in": "path", "required": True, "description": "ID unik produk layanan.", "schema": {"type": "integer"}, "example": 11}
+                        ],
+                        "requestBody": {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "example": {
+                                        "price": 8500,
+                                        "name": "Cuci Kiloan Reguler"
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "200": {
+                                "description": "Harga dan data produk berhasil diperbarui.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": True,
+                                            "message": "Data produk berhasil diperbarui",
+                                            "data": {
+                                                "id": 11,
+                                                "sku": "SRV-WSH-001",
+                                                "name": "Cuci Kiloan Reguler",
+                                                "unit_price": 8500.0,
+                                                "uom": "kg",
+                                                "category": "Layanan Laundry",
+                                                "pricing_type": "weight",
+                                                "active": True
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "400": {
+                                "description": "Validasi gagal (harga tidak valid atau format salah).",
+                                "content": {"application/json": {"example": {"success": False, "message": "Harga produk harus berupa angka lebih besar dari 0"}}}
+                            },
+                            "403": {
+                                "description": "Akses ditolak (hanya internal/admin yang berwenang).",
+                                "content": {"application/json": {"example": {"success": False, "message": "Akses ditolak: Hanya admin atau staf yang berwenang mengubah harga produk."}}}
+                            },
+                            "404": {
+                                "description": "Produk tidak ditemukan.",
+                                "content": {"application/json": {"example": {"success": False, "message": "Data produk tidak ditemukan atau bukan merupakan layanan laundry"}}}
+                            }
+                        }
                     }
                 },
                 "/api/laundry/inventory": {
@@ -543,6 +599,53 @@ class ApiDocsController(http.Controller):
                     }
                 },
                 "/api/laundry/orders": {
+                    "get": {
+                        "tags": ["Orders"],
+                        "summary": "Daftar Pesanan Laundry",
+                        "operationId": "getOrdersList",
+                        "description": "Mengembalikan daftar riwayat transaksi pesanan laundry dengan opsi filter dan pagination.",
+                        "security": [{"BearerAuth": []}, {"SessionHeaderAuth": []}],
+                        "parameters": [
+                            {"name": "partner_id", "in": "query", "required": False, "description": "Filter pesanan berdasarkan ID pelanggan.", "schema": {"type": "integer"}},
+                            {"name": "state", "in": "query", "required": False, "description": "Filter status pesanan (received, washing, ironing, ready, completed, cancelled).", "schema": {"type": "string"}},
+                            {"name": "service_speed", "in": "query", "required": False, "description": "Filter kecepatan pengerjaan (regular, same_day).", "schema": {"type": "string"}},
+                            {"name": "limit", "in": "query", "required": False, "description": "Jumlah maksimal baris data (maks 100).", "schema": {"type": "integer", "default": 50}},
+                            {"name": "offset", "in": "query", "required": False, "description": "Offset baris data untuk paging.", "schema": {"type": "integer", "default": 0}}
+                        ],
+                        "responses": {
+                            "200": {
+                                "description": "Daftar pesanan berhasil diambil.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": True,
+                                            "count": 2,
+                                            "data": [
+                                                {
+                                                    "id": 279,
+                                                    "name": "LDR/2026/00315",
+                                                    "order_date": "2026-10-30T09:19:48",
+                                                    "partner_id": 11,
+                                                    "partner_name": "Rian Ardiansyah",
+                                                    "service_speed": "same_day",
+                                                    "service_speed_fee": 15000.0,
+                                                    "weight": 2.0,
+                                                    "total_amount": 35000.0,
+                                                    "state": "received",
+                                                    "notes": "Pesanan kilat",
+                                                    "lines_count": 1
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            },
+                            "401": {
+                                "description": "Autentikasi diperlukan.",
+                                "content": {"application/json": {"example": {"success": False, "message": "Autentikasi diperlukan. Akses tidak diizinkan."}}}
+                            }
+                        }
+                    },
                     "post": {
                         "tags": ["Orders"],
                         "summary": "Buat Pesanan Laundry",

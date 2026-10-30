@@ -611,6 +611,60 @@ class TestProductApi(TransactionCase):
             res_detail = self.controller.get_product_detail(str(material.id))
             self.assertEqual(res_detail.status_code, 404)
 
+    def test_17_update_product_price_and_attributes(self):
+        """
+        Ketentuan Tugas 12: Admin dapat mengedit/menetapkan harga layanan jika harga kurang atau lebih.
+        Memverifikasi bahwa PUT /api/laundry/products/{id} dapat mengubah list_price di Odoo,
+        memvalidasi harga harus positif, dan menolak user non-staff.
+        """
+        service = self.env['product.template'].create({
+            'name': 'Layanan Uji Edit Harga',
+            'default_code': 'SRV-TEST-EDIT',
+            'list_price': 10000.0,
+            'uom_id': self.uom_kg.id,
+            'type': 'service',
+            'active': True,
+            'sale_ok': True,
+        })
+
+        # 1. Update harga sukses oleh Admin (Rp 10.000 -> Rp 12.500)
+        payload_update = json.dumps({'price': 12500, 'name': 'Layanan Uji Edit Harga Updated'}).encode('utf-8')
+        mock_req = self._mock_request(user=self.admin_user, method='PUT', data=payload_update)
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req):
+            response = self.controller.handle_product_by_id(str(service.id))
+            self.assertEqual(response.status_code, 200)
+            body = json.loads(response.get_data(as_text=True))
+            self.assertTrue(body['success'])
+            self.assertEqual(body['data']['unit_price'], 12500)
+            self.assertEqual(body['data']['name'], 'Layanan Uji Edit Harga Updated')
+            self.assertEqual(service.list_price, 12500.0)
+
+        # 2. Update harga dengan nilai nol atau negatif ditolak (HTTP 400)
+        bad_payload = json.dumps({'price': -5000}).encode('utf-8')
+        mock_req_bad = self._mock_request(user=self.admin_user, method='PUT', data=bad_payload)
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req_bad):
+            response_bad = self.controller.handle_product_by_id(str(service.id))
+            self.assertEqual(response_bad.status_code, 400)
+
+        # 3. User publik / customer ditolak mengubah harga (HTTP 401 / 403)
+        mock_req_pub = self._mock_request(user=self.public_user, method='PUT', data=payload_update)
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req_pub):
+            response_pub = self.controller.handle_product_by_id(str(service.id))
+            self.assertEqual(response_pub.status_code, 401)
+
+    def test_18_empty_product_search_returns_200_and_empty_list(self):
+        """
+        Ketentuan Tugas 12: Mengembalikan HTTP 200 dan {"data":[]} jika daftar kosong / query tidak cocok.
+        """
+        mock_req = self._mock_request(user=self.admin_user, params={'q': 'NON_EXISTENT_QUERY_XYZ_9999'})
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req):
+            response = self.controller.get_products()
+            self.assertEqual(response.status_code, 200)
+            body = json.loads(response.get_data(as_text=True))
+            self.assertTrue(body['success'])
+            self.assertEqual(body['count'], 0)
+            self.assertEqual(body['data'], [])
+
 
 
 

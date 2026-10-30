@@ -1,3 +1,4 @@
+import json
 import logging
 from odoo import http
 from odoo.http import request
@@ -301,7 +302,7 @@ class ProductApiController(BaseApiController):
                 'message': 'Terjadi kesalahan internal pada server'
             }, status=500)
 
-    # Endpoint Detail Produk & Layanan Laundry Berdasarkan ID
+    # Endpoint Detail & Update Produk & Layanan Laundry Berdasarkan ID
     @http.route(
         [
             '/api/laundry/products/<string:product_id>',
@@ -309,13 +310,18 @@ class ProductApiController(BaseApiController):
         ],
         type='http',
         auth='public',
-        methods=['GET', 'OPTIONS'],
+        methods=['GET', 'PUT', 'PATCH', 'OPTIONS'],
         csrf=False
     )
-    def get_product_detail(self, product_id=None, **kwargs):
+    def handle_product_by_id(self, product_id=None, **kwargs):
         if request.httprequest.method == 'OPTIONS':
             return self._json_response({'status': 'ok'})
+        elif request.httprequest.method in ['PUT', 'PATCH']:
+            return self.update_product(product_id=product_id, **kwargs)
+        else:
+            return self.get_product_detail(product_id=product_id, **kwargs)
 
+    def get_product_detail(self, product_id=None, **kwargs):
         try:
             # 1. Autentikasi Pengguna
             user = self._get_authenticated_user(request, session_store_fn=session_store)
@@ -376,6 +382,135 @@ class ProductApiController(BaseApiController):
 
         except Exception as e:
             _logger.exception("Error fetching product detail: %s", str(e))
+            return self._json_response({
+                'success': False,
+                'message': 'Terjadi kesalahan internal pada server'
+            }, status=500)
+
+    def update_product(self, product_id=None, **kwargs):
+        """
+        PUT/PATCH /api/laundry/products/{id}
+        Mengizinkan admin / manager untuk mengubah harga (list_price) atau atribut produk layanan laundry.
+        """
+        try:
+            # 1. Autentikasi Pengguna
+            user = self._get_authenticated_user(request, session_store_fn=session_store)
+            if not user:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Autentikasi diperlukan. Akses tidak diizinkan.'
+                }, status=401)
+
+            # 2. Hak Akses (Authorization - write access)
+            if not user.has_group('base.group_user'):
+                return self._json_response({
+                    'success': False,
+                    'message': 'Akses ditolak: Hanya admin atau staf yang berwenang mengubah harga produk.'
+                }, status=403)
+
+            try:
+                request.env['product.template'].with_user(user).check_access('write')
+            except AccessError:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Akses ditolak: Anda tidak memiliki izin untuk memperbarui data produk.'
+                }, status=403)
+
+            # 3. Validasi ID Produk
+            try:
+                pid = int(str(product_id).strip())
+                if pid <= 0:
+                    raise ValueError
+            except (ValueError, TypeError):
+                return self._json_response({
+                    'success': False,
+                    'message': 'ID produk harus berupa angka positif yang valid'
+                }, status=400)
+
+            # 4. Cari Layanan Laundry
+            product = request.env['product.template'].with_user(user).search([
+                ('id', '=', pid),
+                ('type', '=', 'service'),
+            ], limit=1)
+
+            if not product:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Data produk tidak ditemukan atau bukan merupakan layanan laundry'
+                }, status=404)
+
+            # 5. Parse JSON Body
+            try:
+                raw_body = request.httprequest.data
+                payload = json.loads(raw_body.decode('utf-8')) if raw_body else {}
+            except Exception:
+                payload = request.params
+
+            vals = {}
+
+            # Edit Harga (price / list_price / unit_price)
+            price_val = None
+            if 'price' in payload:
+                price_val = payload['price']
+            elif 'list_price' in payload:
+                price_val = payload['list_price']
+            elif 'unit_price' in payload:
+                price_val = payload['unit_price']
+
+            if price_val is not None:
+                try:
+                    p_float = float(price_val)
+                    if p_float <= 0:
+                        return self._json_response({
+                            'success': False,
+                            'message': 'Harga produk harus berupa angka lebih besar dari 0'
+                        }, status=400)
+                    vals['list_price'] = p_float
+                except (ValueError, TypeError):
+                    return self._json_response({
+                        'success': False,
+                        'message': 'Format harga produk tidak valid'
+                    }, status=400)
+
+            # Edit Nama Produk (opsional)
+            if 'name' in payload and payload['name'] is not None:
+                clean_name = str(payload['name']).strip()
+                if not clean_name:
+                    return self._json_response({
+                        'success': False,
+                        'message': 'Nama produk tidak boleh kosong'
+                    }, status=400)
+                vals['name'] = clean_name
+
+            # Edit Deskripsi (opsional)
+            if 'description' in payload and payload['description'] is not None:
+                vals['description_sale'] = str(payload['description']).strip()
+
+            # Edit Status Aktif / Sale OK (opsional)
+            if 'active' in payload and payload['active'] is not None:
+                vals['active'] = bool(payload['active'])
+            if 'sale_ok' in payload and payload['sale_ok'] is not None:
+                vals['sale_ok'] = bool(payload['sale_ok'])
+
+            if not vals:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Tidak ada perubahan data yang dikirimkan.'
+                }, status=400)
+
+            # Update via Odoo ORM
+            product.write(vals)
+
+            # Serialisasi hasil pembaruan
+            is_valid, result_or_err = self._validate_and_serialize_product(product)
+            return self._json_response({
+                'success': True,
+                'message': 'Data produk berhasil diperbarui',
+                'data': result_or_err
+            }, status=200)
+
+        except Exception as e:
+            _logger.exception("Error updating product %s: %s", product_id, str(e))
             return self._json_response({
                 'success': False,
                 'message': 'Terjadi kesalahan internal pada server'

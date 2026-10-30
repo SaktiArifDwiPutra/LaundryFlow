@@ -68,9 +68,117 @@ class OrderApiController(BaseApiController):
         ],
         type='http',
         auth='public',
-        methods=['POST', 'OPTIONS'],
+        methods=['GET', 'POST', 'OPTIONS'],
         csrf=False,
     )
+    def handle_orders(self, **kwargs):
+        """
+        Handler routing untuk pesanan laundry:
+        - GET: Mengembalikan daftar pesanan (list orders)
+        - POST: Membuat transaksi pesanan baru
+        - OPTIONS: CORS preflight
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return self._json_response({'status': 'ok'})
+        elif request.httprequest.method == 'POST':
+            return self.create_order(**kwargs)
+        else:
+            return self.get_orders(**kwargs)
+
+    def get_orders(self, **kwargs):
+        """
+        GET /api/laundry/orders
+        Mengembalikan daftar transaksi pesanan laundry dengan filter opsional:
+        partner_id, state, service_speed, limit, dan offset.
+        """
+        try:
+            user = self._get_authenticated_user(request, session_store_fn=session_store)
+            if not user:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Autentikasi diperlukan. Akses tidak diizinkan.',
+                }, status=401)
+
+            domain = []
+
+            # Filter partner_id jika dikirim atau jika user adalah portal/customer
+            partner_param = kwargs.get('partner_id') or request.params.get('partner_id')
+            if partner_param:
+                try:
+                    domain.append(('partner_id', '=', int(partner_param)))
+                except (ValueError, TypeError):
+                    pass
+            elif user.has_group('base.group_portal'):
+                domain.append(('partner_id', '=', user.partner_id.id))
+
+            # Filter state (received, washing, ironing, ready, completed, cancelled)
+            state_param = kwargs.get('state') or request.params.get('state')
+            if state_param and str(state_param).strip():
+                domain.append(('state', '=', str(state_param).strip()))
+
+            # Filter service_speed (regular, same_day)
+            speed_param = kwargs.get('service_speed') or request.params.get('service_speed')
+            if speed_param and str(speed_param).strip():
+                domain.append(('service_speed', '=', str(speed_param).strip()))
+
+            # Pagination
+            limit = 50
+            limit_raw = kwargs.get('limit') or request.params.get('limit')
+            if limit_raw:
+                try:
+                    l = int(limit_raw)
+                    if 0 < l <= 100:
+                        limit = l
+                except (ValueError, TypeError):
+                    pass
+
+            offset = 0
+            offset_raw = kwargs.get('offset') or request.params.get('offset')
+            if offset_raw:
+                try:
+                    o = int(offset_raw)
+                    if o >= 0:
+                        offset = o
+                except (ValueError, TypeError):
+                    pass
+
+            orders = request.env['laundry.order'].with_user(user).search(
+                domain,
+                order='order_date desc, id desc',
+                limit=limit,
+                offset=offset
+            )
+
+            data = []
+            for order in orders:
+                data.append({
+                    'id': order.id,
+                    'name': order.name,
+                    'order_date': order.order_date.isoformat() if order.order_date else None,
+                    'partner_id': order.partner_id.id,
+                    'partner_name': order.partner_id.name,
+                    'service_speed': order.service_speed,
+                    'service_speed_fee': float(order.service_speed_fee or 0.0),
+                    'weight': float(order.weight or 0.0),
+                    'total_amount': float(order.total_amount or 0.0),
+                    'state': order.state,
+                    'notes': order.notes or '',
+                    'lines_count': len(order.line_ids),
+                })
+
+            return self._json_response({
+                'success': True,
+                'count': len(data),
+                'data': data
+            }, status=200)
+
+        except Exception as e:
+            _logger.exception("Error in get_orders: %s", str(e))
+            return self._json_response({
+                'success': False,
+                'message': 'Terjadi kesalahan pada server.',
+            }, status=500)
+
     def create_order(self, **kwargs):
         """
         Membuat transaksi pesanan laundry dengan validasi jenis pengerjaan (Reguler atau Same Day Service).
