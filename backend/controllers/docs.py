@@ -67,6 +67,10 @@ class ApiDocsController(http.Controller):
                     "name": "Orders",
                     "description": "Pengelolaan opsi pesanan, kecepatan pengerjaan (Reguler & Same Day Service), dan order laundry (`laundry.order`).",
                 },
+                {
+                    "name": "Inventory",
+                    "description": "Monitoring stok bahan laundry, lokasi internal, rincian batch/lot, dan status kedaluwarsa untuk Admin dan Pegawai.",
+                },
             ],
             "paths": {
                 "/api/laundry/auth/login": {
@@ -979,6 +983,80 @@ class ApiDocsController(http.Controller):
                                         "schema": {"$ref": "#/components/schemas/ErrorResponse"},
                                     }
                                 },
+                            },
+                        },
+                    }
+                },
+                "/api/laundry/inventory": {
+                    "get": {
+                        "tags": ["Inventory"],
+                        "summary": "Monitoring Inventory Bahan Laundry",
+                        "operationId": "getInventoryList",
+                        "description": (
+                            "Mengambil data monitoring inventory bahan laundry dari lokasi internal Odoo beserta rincian batch dan status kedaluwarsa.\n\n"
+                            "**Keamanan & Hak Akses:**\n"
+                            "- Hanya untuk Admin dan Pegawai internal Odoo (`base.group_user`).\n"
+                            "- Pelanggan (`base.group_portal` atau unauthenticated) ditolak (401 / 403).\n"
+                            "- Harga beli (`purchase_price`) dan data internal tidak pernah dikirim ke pelanggan.\n"
+                            "- Stok dihitung hanya dari lokasi internal gudang (`usage = 'internal'`).\n\n"
+                            "**Route Alias yang Didukung:**\n"
+                            "- `GET /api/laundry/inventory`\n"
+                            "- `GET /api/inventory`"
+                        ),
+                        "security": [
+                            {"BearerAuth": []},
+                            {"SessionHeaderAuth": []},
+                            {"ApiKeyHeaderAuth": []},
+                        ],
+                        "responses": {
+                            "200": {
+                                "description": "Daftar inventory bahan laundry berhasil diambil.",
+                            },
+                            "401": {
+                                "description": "Autentikasi diperlukan.",
+                            },
+                            "403": {
+                                "description": "Akses ditolak: Pelanggan tidak memiliki izin.",
+                            },
+                        },
+                    }
+                },
+                "/api/laundry/inventory/{product_id}": {
+                    "get": {
+                        "tags": ["Inventory"],
+                        "summary": "Detail Inventory Bahan Laundry",
+                        "operationId": "getInventoryDetail",
+                        "description": (
+                            "Mengambil rincian stok internal dan daftar batch untuk satu bahan laundry tertentu.\n\n"
+                            "**Keamanan:** Hanya dapat diakses oleh Admin atau Pegawai internal."
+                        ),
+                        "security": [
+                            {"BearerAuth": []},
+                            {"SessionHeaderAuth": []},
+                            {"ApiKeyHeaderAuth": []},
+                        ],
+                        "parameters": [
+                            {
+                                "name": "product_id",
+                                "in": "path",
+                                "required": True,
+                                "description": "ID unik produk bahan laundry (`product.product`).",
+                                "schema": {"type": "integer", "minimum": 1},
+                                "example": 92,
+                            }
+                        ],
+                        "responses": {
+                            "200": {
+                                "description": "Detail inventory produk berhasil diambil.",
+                            },
+                            "401": {
+                                "description": "Autentikasi diperlukan.",
+                            },
+                            "403": {
+                                "description": "Akses ditolak untuk pelanggan.",
+                            },
+                            "404": {
+                                "description": "Bahan laundry tidak ditemukan.",
                             },
                         },
                     }
