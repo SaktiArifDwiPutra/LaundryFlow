@@ -163,3 +163,80 @@ class OrderApiController(BaseApiController):
                 'success': False,
                 'message': 'Terjadi kesalahan pada server.',
             }, status=500)
+
+    @http.route(
+        [
+            '/api/laundry/orders/<int:order_id>',
+            '/api/orders/<int:order_id>',
+        ],
+        type='http',
+        auth='public',
+        methods=['GET', 'OPTIONS'],
+        csrf=False,
+    )
+    def get_order_detail(self, order_id, **kwargs):
+        """
+        Mengembalikan rincian lengkap satu transaksi pesanan laundry beserta detail item,
+        satuan, snapshot harga satuan, luas karpet (m²), subtotal, dan total pesanan.
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return self._json_response({'status': 'ok'})
+
+        try:
+            user = self._get_authenticated_user(request, session_store_fn=session_store)
+            if not user:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Autentikasi diperlukan. Akses tidak diizinkan.',
+                }, status=401)
+
+            order = request.env['laundry.order'].with_user(user).browse(order_id)
+            if not order.exists():
+                return self._json_response({
+                    'success': False,
+                    'message': f'Pesanan dengan ID {order_id} tidak ditemukan.',
+                }, status=404)
+
+            lines_data = []
+            for line in order.line_ids:
+                lines_data.append({
+                    'id': line.id,
+                    'product_id': line.product_template_id.id,
+                    'product_name': line.product_template_id.name,
+                    'pricing_type': line.pricing_type,
+                    'uom': line.uom_id.name if line.uom_id else '',
+                    'weight': line.weight,
+                    'quantity': line.quantity,
+                    'length': line.length,
+                    'width': line.width,
+                    'area': line.area,
+                    'price_unit': line.price_unit,
+                    'subtotal': line.subtotal,
+                    'item_details': line.item_details or '',
+                })
+
+            return self._json_response({
+                'success': True,
+                'data': {
+                    'id': order.id,
+                    'name': order.name,
+                    'order_date': order.order_date.isoformat() if order.order_date else None,
+                    'partner_id': order.partner_id.id,
+                    'partner_name': order.partner_id.name,
+                    'service_speed': order.service_speed,
+                    'service_speed_fee': order.service_speed_fee,
+                    'weight': order.weight,
+                    'total_amount': order.total_amount,
+                    'state': order.state,
+                    'notes': order.notes or '',
+                    'lines': lines_data,
+                }
+            }, status=200)
+
+        except Exception as e:
+            _logger.exception("Error in get_order_detail: %s", str(e))
+            return self._json_response({
+                'success': False,
+                'message': 'Terjadi kesalahan pada server.',
+            }, status=500)
+

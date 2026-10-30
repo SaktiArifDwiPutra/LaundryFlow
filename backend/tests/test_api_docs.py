@@ -62,6 +62,28 @@ class TestApiDocs(TransactionCase):
             self.assertIn("/api/laundry/products/{product_id}", paths)
             self.assertIn("get", paths["/api/laundry/products/{product_id}"])
 
+            # Verify inventory endpoints and 2-batch example
+            self.assertIn("/api/laundry/inventory", paths)
+            self.assertIn("get", paths["/api/laundry/inventory"])
+            inv_example = paths["/api/laundry/inventory"]["get"]["responses"]["200"]["content"]["application/json"]["example"]
+            self.assertIn("data", inv_example)
+            two_batch_item = next((item for item in inv_example["data"] if len(item.get("batches", [])) >= 2), None)
+            self.assertIsNotNone(two_batch_item, "Dokumentasi inventory harus menyertakan contoh produk dengan minimal 2 batch")
+
+            self.assertIn("/api/laundry/inventory/{product_id}", paths)
+            self.assertIn("get", paths["/api/laundry/inventory/{product_id}"])
+
+            # Verify order endpoints and service speed
+            self.assertIn("/api/laundry/service-speeds", paths)
+            self.assertIn("get", paths["/api/laundry/service-speeds"])
+
+            self.assertIn("/api/laundry/orders", paths)
+            self.assertIn("post", paths["/api/laundry/orders"])
+
+            self.assertIn("/api/laundry/orders/{order_id}", paths)
+            self.assertIn("get", paths["/api/laundry/orders/{order_id}"])
+
+
     def test_02_scalar_docs_html(self):
         """Test that /api/docs returns HTTP 200 with Scalar API Reference HTML."""
         mock_req = self._mock_request(method="GET")
