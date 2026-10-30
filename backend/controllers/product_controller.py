@@ -14,7 +14,7 @@ class ProductApiController(BaseApiController):
     def _validate_and_serialize_product(self, product):
         """
         Validates a product.template record (or search_read dict) and serializes it
-        for the Flutter client with required fields: id, name, unit_price, uom.
+        for the Flutter client with required fields: id, sku, name, unit_price, uom, category, pricing_type.
         Explicitly rejects missing, empty, zero, or negative prices and missing/empty UoM
         without substituting fake defaults or empty strings.
         Returns tuple (is_valid, serialized_dict_or_error_info).
@@ -22,37 +22,57 @@ class ProductApiController(BaseApiController):
         if isinstance(product, dict):
             prod_id = product.get('id')
             raw_name = product.get('name')
+            raw_sku = product.get('default_code')
             raw_price = product.get('list_price')
             uom_raw = product.get('uom_id')
             if isinstance(uom_raw, (list, tuple)) and len(uom_raw) >= 2 and uom_raw[0]:
                 uom_name = uom_raw[1] if isinstance(uom_raw[1], str) else None
             else:
                 uom_name = None
+            categ_raw = product.get('categ_id')
+            if isinstance(categ_raw, (list, tuple)) and len(categ_raw) >= 2 and categ_raw[0]:
+                categ_id = categ_raw[0]
+                categ_name = categ_raw[1] if isinstance(categ_raw[1], str) else None
+            else:
+                categ_id = None
+                categ_name = None
             raw_type = product.get('type')
             raw_active = product.get('active', True)
+            raw_desc = product.get('description_sale') or product.get('description')
             curr_raw = product.get('currency_id')
             currency_name = (
                 curr_raw[1].strip()
                 if isinstance(curr_raw, (list, tuple)) and len(curr_raw) >= 2 and isinstance(curr_raw[1], str) and curr_raw[1].strip()
                 else 'IDR'
             )
+            has_image = bool(product.get('image_128'))
         else:
             prod_id = getattr(product, 'id', None)
             raw_name = getattr(product, 'name', None)
+            raw_sku = getattr(product, 'default_code', None)
             raw_price = getattr(product, 'list_price', None)
             uom_rec = getattr(product, 'uom_id', None)
             if uom_rec and getattr(uom_rec, 'id', None):
                 uom_name = getattr(uom_rec, 'name', None)
             else:
                 uom_name = None
+            categ_rec = getattr(product, 'categ_id', None)
+            if categ_rec and getattr(categ_rec, 'id', None):
+                categ_id = categ_rec.id
+                categ_name = getattr(categ_rec, 'name', None)
+            else:
+                categ_id = None
+                categ_name = None
             raw_type = getattr(product, 'type', None)
             raw_active = getattr(product, 'active', True)
+            raw_desc = getattr(product, 'description_sale', None) or getattr(product, 'description', None)
             curr_rec = getattr(product, 'currency_id', None)
             currency_name = (
                 curr_rec.name.strip()
                 if curr_rec and getattr(curr_rec, 'id', None) and isinstance(getattr(curr_rec, 'name', None), str) and curr_rec.name.strip()
                 else 'IDR'
             )
+            has_image = bool(getattr(product, 'image_128', None))
 
         errors = []
 
@@ -97,11 +117,34 @@ class ProductApiController(BaseApiController):
                 'reason': '; '.join(errors),
             }
 
+        # Menentukan tipe perhitungan tarif (pricing_type) berdasarkan UoM
+        clean_uom_lower = clean_uom.lower()
+        if clean_uom_lower in ['kg', 'kilogram', 'g', 'gram']:
+            pricing_type = 'weight'
+        elif clean_uom_lower in ['m²', 'm2', 'meter persegi', 'sqm']:
+            pricing_type = 'area'
+        elif clean_uom_lower in ['set']:
+            pricing_type = 'set'
+        else:
+            pricing_type = 'unit'
+
+        clean_sku = raw_sku.strip() if isinstance(raw_sku, str) and raw_sku.strip() else None
+        clean_categ = categ_name.strip() if isinstance(categ_name, str) and categ_name.strip() else None
+        clean_desc = raw_desc.strip() if isinstance(raw_desc, str) and raw_desc.strip() else None
+        image_url = f"/web/image/product.template/{prod_id}/image_128" if has_image else None
+
         return True, {
             'id': prod_id,
+            'sku': clean_sku,
             'name': clean_name,
             'unit_price': unit_price,
             'uom': clean_uom,
+            'category': clean_categ,
+            'category_id': categ_id,
+            'pricing_type': pricing_type,
+            'description': clean_desc,
+            'image': image_url,
+            # Field kompatibilitas untuk aplikasi Flutter / client lama
             'price': unit_price,
             'unit': clean_uom,
             'service_name': clean_name,
@@ -178,10 +221,38 @@ class ProductApiController(BaseApiController):
                 ('sale_ok', '=', True),
             ]
 
-            # Filter opsional berdasarkan nama (q / query)
+            # Filter opsional berdasarkan kategori (category_id atau category)
+            category_param = (
+                kwargs.get('category_id')
+                or request.params.get('category_id')
+                or kwargs.get('category')
+                or request.params.get('category')
+            )
+            if category_param is not None and str(category_param).strip() != '':
+                cat_val = str(category_param).strip()
+                if cat_val.isdigit():
+                    domain.append(('categ_id', '=', int(cat_val)))
+                else:
+                    domain.append(('categ_id.name', 'ilike', cat_val))
+
+            # Filter opsional berdasarkan pricing_type
+            pricing_type_param = kwargs.get('pricing_type') or request.params.get('pricing_type')
+            if pricing_type_param and isinstance(pricing_type_param, str) and pricing_type_param.strip():
+                pt = pricing_type_param.strip().lower()
+                if pt == 'weight':
+                    domain.append(('uom_id.name', 'in', ['kg', 'g', 'gram']))
+                elif pt == 'area':
+                    domain.append(('uom_id.name', 'in', ['m²', 'm2']))
+                elif pt == 'set':
+                    domain.append(('uom_id.name', 'in', ['set']))
+                elif pt == 'unit':
+                    domain.append(('uom_id.name', 'in', ['pcs', 'unit', 'Units']))
+
+            # Filter opsional berdasarkan nama atau SKU (q / query)
             q = kwargs.get('q') or request.params.get('q') or kwargs.get('query') or request.params.get('query')
             if q and isinstance(q, str) and q.strip():
-                domain.append(('name', 'ilike', q.strip()))
+                q_clean = q.strip()
+                domain.extend(['|', ('name', 'ilike', q_clean), ('default_code', 'ilike', q_clean)])
 
             # 5. Ambil data melalui Odoo ORM (product.template)
             ProductTemplate = request.env['product.template'].with_user(user)

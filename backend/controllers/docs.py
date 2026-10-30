@@ -1187,6 +1187,12 @@ class ApiDocsController(http.Controller):
                                 "description": "ID unik produk / layanan laundry (`product.template`).",
                                 "example": 11,
                             },
+                            "sku": {
+                                "type": "string",
+                                "nullable": True,
+                                "description": "Kode SKU / Internal Reference produk di Odoo (`default_code`).",
+                                "example": "SRV-WSH-001",
+                            },
                             "name": {
                                 "type": "string",
                                 "description": "Nama produk atau layanan laundry.",
@@ -1199,8 +1205,38 @@ class ApiDocsController(http.Controller):
                             },
                             "uom": {
                                 "type": "string",
-                                "description": "Nama satuan layanan laundry dari relasi Odoo `uom_id.name`.",
+                                "description": "Nama satuan layanan laundry dari relasi Odoo `uom_id.name` (kg, pcs, set, m²).",
                                 "example": "kg",
+                            },
+                            "category": {
+                                "type": "string",
+                                "nullable": True,
+                                "description": "Nama kategori produk layanan laundry (`categ_id.name`).",
+                                "example": "Layanan Laundry",
+                            },
+                            "category_id": {
+                                "type": "integer",
+                                "nullable": True,
+                                "description": "ID kategori produk di Odoo (`categ_id`).",
+                                "example": 4,
+                            },
+                            "pricing_type": {
+                                "type": "string",
+                                "enum": ["weight", "unit", "set", "area"],
+                                "description": "Tipe perhitungan harga berdasarkan satuan (weight: per kg, unit: per pcs, set: per set, area: per m²).",
+                                "example": "weight",
+                            },
+                            "description": {
+                                "type": "string",
+                                "nullable": True,
+                                "description": "Deskripsi atau catatan layanan laundry.",
+                                "example": "Layanan cuci lipat kiloan standar",
+                            },
+                            "image": {
+                                "type": "string",
+                                "nullable": True,
+                                "description": "URL gambar produk jika tersedia.",
+                                "example": "/web/image/product.template/11/image_128",
                             },
                             "price": {
                                 "type": "number",
