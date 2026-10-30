@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- List View Bahan Laundry -->
+    <record id="view_laundry_product_material_tree" model="ir.ui.view">
+        <field name="name">product.template.laundry.material.tree</field>
+        <field name="model">product.template</field>
+        <field name="arch" type="xml">
+            <list string="Bahan Laundry" decoration-danger="is_low_stock" decoration-warning="has_expired_batches">
+                <field name="default_code" string="SKU"/>
+                <field name="name" string="Nama Bahan"/>
+                <field name="categ_id" string="Kategori"/>
+                <field name="uom_id" string="Satuan (UoM)"/>
+                <field name="standard_price" string="Harga Beli (Cost)"/>
+                <field name="list_price" string="Harga Jual"/>
+                <field name="qty_available" string="Stok Aktual"/>
+                <field name="min_stock_qty" string="Stok Minimum"/>
+                <field name="is_low_stock" string="Stok Rendah" widget="boolean_toggle"/>
+                <field name="has_expired_batches" string="Batch Kedaluwarsa" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Action Window Bahan Laundry -->
+    <record id="action_laundry_product_materials" model="ir.actions.act_window">
+        <field name="name">Bahan Laundry</field>
+        <field name="res_model">product.template</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_laundry_product_material_tree')})]"/>
+        <field name="domain">[('categ_id.name', '=', 'Bahan Laundry')]</field>
+        <field name="context">{'default_type': 'consu', 'default_is_storable': True, 'default_tracking': 'lot', 'default_use_expiration_date': True}</field>
+    </record>
+
+    <!-- Menu Inventory & Bahan -->
+    <menuitem id="laundry_menu_inventory"
+              name="Inventory &amp; Bahan"
+              parent="menu_laundry_root"
+              sequence="30"/>
+
+    <menuitem id="laundry_menu_materials"
+              name="Bahan Laundry"
+              parent="laundry_menu_inventory"
+              action="action_laundry_product_materials"
+              sequence="10"/>
+
+    <menuitem id="laundry_menu_lots"
+              name="Batch &amp; Kedaluwarsa"
+              parent="laundry_menu_inventory"
+              action="action_laundry_stock_lot"
+              sequence="20"/>
+</odoo>

@@ -1,5 +1,6 @@
 enum OrderPriority {
   regular('regular', 'Reguler'),
+  sameDay('same_day', 'Same Day Service'),
   express('express', 'Express');
 
   const OrderPriority(this.code, this.label);
@@ -8,6 +9,9 @@ enum OrderPriority {
   final String label;
 
   static OrderPriority fromCode(String? code) {
+    if (code == 'same_day' || code == 'express') {
+      return OrderPriority.sameDay;
+    }
     return OrderPriority.values.firstWhere(
       (p) => p.code == code,
       orElse: () => OrderPriority.regular,

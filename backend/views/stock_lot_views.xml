@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Tree View Khusus Batch / Lot Bahan Laundry -->
+    <record id="view_laundry_stock_lot_tree" model="ir.ui.view">
+        <field name="name">stock.lot.laundry.tree</field>
+        <field name="model">stock.lot</field>
+        <field name="arch" type="xml">
+            <list string="Batch Bahan Laundry" decoration-danger="expiration_status == 'expired'" decoration-warning="expiration_status == 'expiring_soon'">
+                <field name="name" string="Nomor Batch"/>
+                <field name="product_id" string="Produk Bahan"/>
+                <field name="supplier_id" string="Supplier"/>
+                <field name="receipt_date" string="Tanggal Penerimaan"/>
+                <field name="expiration_date" string="Tanggal Kedaluwarsa"/>
+                <field name="product_qty" string="Kuantitas"/>
+                <field name="expiration_status" string="Status Kedaluwarsa" widget="badge" decoration-success="expiration_status == 'safe'" decoration-warning="expiration_status == 'expiring_soon'" decoration-danger="expiration_status == 'expired'" decoration-info="expiration_status == 'unknown'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View Khusus Batch / Lot Bahan Laundry -->
+    <record id="view_laundry_stock_lot_form" model="ir.ui.view">
+        <field name="name">stock.lot.laundry.form</field>
+        <field name="model">stock.lot</field>
+        <field name="arch" type="xml">
+            <form string="Batch Bahan Laundry">
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name" string="Nomor Batch / Lot"/>
+                        <h1><field name="name" placeholder="misal: BATCH-DET-202610-001"/></h1>
+                    </div>
+                    <group>
+                        <group string="Informasi Produk &amp; Supplier">
+                            <field name="product_id" domain="[('categ_id.name', '=', 'Bahan Laundry')]"/>
+                            <field name="supplier_id"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                        <group string="Tanggal &amp; Kuantitas">
+                            <field name="receipt_date"/>
+                            <field name="expiration_date"/>
+                            <field name="product_qty" readonly="1"/>
+                            <field name="days_to_expiration" readonly="1"/>
+                            <field name="expiration_status" widget="badge"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action untuk Batch & Kedaluwarsa -->
+    <record id="action_laundry_stock_lot" model="ir.actions.act_window">
+        <field name="name">Batch &amp; Kedaluwarsa</field>
+        <field name="res_model">stock.lot</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_laundry_stock_lot_tree')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_laundry_stock_lot_form')})]"/>
+        <field name="domain">[('product_id.categ_id.name', '=', 'Bahan Laundry')]</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Belum ada batch bahan laundry yang tercatat.
+            </p>
+        </field>
+    </record>
+</odoo>

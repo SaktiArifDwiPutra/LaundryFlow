@@ -1,2 +1,3 @@
 id,name,model_id,group_id/id,operation,domain
 access_laundry_order_user,laundry.order user,laundry.order,base.group_user,crud,
+access_laundry_order_line_user,laundry.order.line user,laundry.order.line,base.group_user,crud,

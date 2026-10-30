@@ -39,6 +39,20 @@ class TestProductApi(TransactionCase):
                 'active': True,
             })
 
+        cls.uom_m2 = cls.env.ref('uom.product_uom_square_meter', raise_if_not_found=False)
+        if not cls.uom_m2:
+            cls.uom_m2 = cls.env['uom.uom'].search([('name', '=', 'm²')], limit=1) or cls.env['uom.uom'].browse(11)
+
+        cls.uom_set = cls.env['uom.uom'].search([('name', '=', 'set')], limit=1)
+        if not cls.uom_set:
+            unit_ref = cls.env.ref('uom.product_uom_unit', raise_if_not_found=False) or cls.env['uom.uom'].browse(1)
+            cls.uom_set = cls.env['uom.uom'].create({
+                'name': 'set',
+                'relative_uom_id': unit_ref.id,
+                'relative_factor': 1.0,
+                'active': True,
+            })
+
     def _mock_request(self, user=None, headers=None, params=None, method='GET', data=None):
         """Creates a mock odoo.http.request context."""
         mock_req = MagicMock()
@@ -499,6 +513,158 @@ class TestProductApi(TransactionCase):
             self.assertEqual(res_404.status_code, 404)
             body_404 = json.loads(res_404.get_data(as_text=True))
             self.assertFalse(body_404.get('success'))
+
+    def test_15_uom_support_and_extended_fields(self):
+        """
+        Verify that Product API supports services with various UoMs (kg, pcs, set, m²)
+        and properly serializes required minimal fields: id, sku, name, unit_price, uom, category, pricing_type.
+        """
+        cat_test = self.env['product.category'].search([('name', '=', 'Layanan Laundry')], limit=1)
+        if not cat_test:
+            cat_test = self.env['product.category'].create({'name': 'Layanan Laundry'})
+
+        # Create active test services with different UoMs
+        srv_carpet = self.env['product.template'].create({
+            'name': 'Cuci Karpet Spesial Test',
+            'default_code': 'SRV-TEST-M2',
+            'list_price': 35000.0,
+            'uom_id': self.uom_m2.id,
+            'type': 'service',
+            'categ_id': cat_test.id,
+            'active': True,
+            'sale_ok': True,
+        })
+        srv_sprei = self.env['product.template'].create({
+            'name': 'Cuci Sprei Set Test',
+            'default_code': 'SRV-TEST-SET',
+            'list_price': 40000.0,
+            'uom_id': self.uom_set.id,
+            'type': 'service',
+            'categ_id': cat_test.id,
+            'active': True,
+            'sale_ok': True,
+        })
+
+        mock_req = self._mock_request(user=self.admin_user)
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req):
+            response = self.controller.get_products()
+            self.assertEqual(response.status_code, 200)
+            body = json.loads(response.get_data(as_text=True))
+            self.assertTrue(body['success'])
+
+            prod_map = {p['id']: p for p in body['data']}
+            self.assertIn(srv_carpet.id, prod_map)
+            self.assertIn(srv_sprei.id, prod_map)
+
+            carpet_data = prod_map[srv_carpet.id]
+            self.assertEqual(carpet_data['sku'], 'SRV-TEST-M2')
+            self.assertEqual(carpet_data['pricing_type'], 'area')
+            self.assertEqual(carpet_data['uom'], self.uom_m2.name)
+            self.assertEqual(carpet_data['category'], cat_test.name)
+            self.assertEqual(carpet_data['unit_price'], 35000)
+
+            sprei_data = prod_map[srv_sprei.id]
+            self.assertEqual(sprei_data['sku'], 'SRV-TEST-SET')
+            self.assertEqual(sprei_data['pricing_type'], 'set')
+            self.assertEqual(sprei_data['uom'], self.uom_set.name)
+            self.assertEqual(sprei_data['category'], cat_test.name)
+            self.assertEqual(sprei_data['unit_price'], 40000)
+
+            # Test detail endpoint for carpet
+            res_detail = self.controller.get_product_detail(str(srv_carpet.id))
+            self.assertEqual(res_detail.status_code, 200)
+            detail_json = json.loads(res_detail.get_data(as_text=True))
+            self.assertEqual(detail_json['data']['pricing_type'], 'area')
+            self.assertEqual(detail_json['data']['sku'], 'SRV-TEST-M2')
+
+    def test_16_materials_never_leaked_to_customer_catalog(self):
+        """
+        Verify that inventory materials (type='consu', is_storable=True, purchase_ok=True, sale_ok=False)
+        are strictly never returned in GET /api/laundry/products or GET /api/laundry/products/{id}.
+        """
+        mat_cat = self.env['product.category'].search([('name', '=', 'Bahan Laundry')], limit=1)
+        if not mat_cat:
+            mat_cat = self.env['product.category'].create({'name': 'Bahan Laundry'})
+
+        material = self.env['product.template'].create({
+            'name': 'Deterjen Bubuk Secret Stock',
+            'default_code': 'MAT-SECRET-001',
+            'list_price': 15000.0,
+            'uom_id': self.uom_kg.id,
+            'type': 'consu',
+            'is_storable': True,
+            'categ_id': mat_cat.id,
+            'active': True,
+            'purchase_ok': True,
+            'sale_ok': False,
+        })
+
+        mock_req = self._mock_request(user=self.admin_user)
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req):
+            response = self.controller.get_products()
+            self.assertEqual(response.status_code, 200)
+            body = json.loads(response.get_data(as_text=True))
+            product_ids = [p['id'] for p in body['data']]
+            self.assertNotIn(material.id, product_ids)
+
+            # Detail endpoint for material must return 404
+            res_detail = self.controller.get_product_detail(str(material.id))
+            self.assertEqual(res_detail.status_code, 404)
+
+    def test_17_update_product_price_and_attributes(self):
+        """
+        Ketentuan Tugas 12: Admin dapat mengedit/menetapkan harga layanan jika harga kurang atau lebih.
+        Memverifikasi bahwa PUT /api/laundry/products/{id} dapat mengubah list_price di Odoo,
+        memvalidasi harga harus positif, dan menolak user non-staff.
+        """
+        service = self.env['product.template'].create({
+            'name': 'Layanan Uji Edit Harga',
+            'default_code': 'SRV-TEST-EDIT',
+            'list_price': 10000.0,
+            'uom_id': self.uom_kg.id,
+            'type': 'service',
+            'active': True,
+            'sale_ok': True,
+        })
+
+        # 1. Update harga sukses oleh Admin (Rp 10.000 -> Rp 12.500)
+        payload_update = json.dumps({'price': 12500, 'name': 'Layanan Uji Edit Harga Updated'}).encode('utf-8')
+        mock_req = self._mock_request(user=self.admin_user, method='PUT', data=payload_update)
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req):
+            response = self.controller.handle_product_by_id(str(service.id))
+            self.assertEqual(response.status_code, 200)
+            body = json.loads(response.get_data(as_text=True))
+            self.assertTrue(body['success'])
+            self.assertEqual(body['data']['unit_price'], 12500)
+            self.assertEqual(body['data']['name'], 'Layanan Uji Edit Harga Updated')
+            self.assertEqual(service.list_price, 12500.0)
+
+        # 2. Update harga dengan nilai nol atau negatif ditolak (HTTP 400)
+        bad_payload = json.dumps({'price': -5000}).encode('utf-8')
+        mock_req_bad = self._mock_request(user=self.admin_user, method='PUT', data=bad_payload)
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req_bad):
+            response_bad = self.controller.handle_product_by_id(str(service.id))
+            self.assertEqual(response_bad.status_code, 400)
+
+        # 3. User publik / customer ditolak mengubah harga (HTTP 401 / 403)
+        mock_req_pub = self._mock_request(user=self.public_user, method='PUT', data=payload_update)
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req_pub):
+            response_pub = self.controller.handle_product_by_id(str(service.id))
+            self.assertEqual(response_pub.status_code, 401)
+
+    def test_18_empty_product_search_returns_200_and_empty_list(self):
+        """
+        Ketentuan Tugas 12: Mengembalikan HTTP 200 dan {"data":[]} jika daftar kosong / query tidak cocok.
+        """
+        mock_req = self._mock_request(user=self.admin_user, params={'q': 'NON_EXISTENT_QUERY_XYZ_9999'})
+        with patch('odoo.addons.laundryflow_backend.controllers.product_controller.request', mock_req):
+            response = self.controller.get_products()
+            self.assertEqual(response.status_code, 200)
+            body = json.loads(response.get_data(as_text=True))
+            self.assertTrue(body['success'])
+            self.assertEqual(body['count'], 0)
+            self.assertEqual(body['data'], [])
+
 
 
 

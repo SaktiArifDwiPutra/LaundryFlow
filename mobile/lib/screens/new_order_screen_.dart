@@ -247,13 +247,13 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
               const Divider(height: 32),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Express'),
-                subtitle: const Text('Lebih cepat, biaya lebih tinggi'),
+                title: const Text('Same Day Service'),
+                subtitle: const Text('Prioritas pengerjaan selesai di hari yang sama'),
                 secondary: const Icon(Icons.bolt, color: Colors.orange),
-                value: _priority == OrderPriority.express,
+                value: _priority == OrderPriority.sameDay || _priority == OrderPriority.express,
                 onChanged: (on) => setState(
                   () => _priority =
-                      on ? OrderPriority.express : OrderPriority.regular,
+                      on ? OrderPriority.sameDay : OrderPriority.regular,
                 ),
               ),
               const SizedBox(height: 16),

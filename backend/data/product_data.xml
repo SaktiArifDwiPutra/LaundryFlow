@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- UoM: Set -->
+        <record id="uom_set" model="uom.uom">
+            <field name="name">set</field>
+            <field name="relative_uom_id" ref="uom.product_uom_unit"/>
+            <field name="relative_factor">1.0</field>
+            <field name="factor">1.0</field>
+            <field name="active" eval="True"/>
+        </record>
+
+        <!-- Kategori Produk Layanan & Bahan Laundry -->
+        <record id="cat_laundry" model="product.category">
+            <field name="name">Layanan Laundry</field>
+            <field name="parent_id" ref="product.product_category_services"/>
+        </record>
+
+        <record id="cat_home" model="product.category">
+            <field name="name">Laundry Karpet &amp; Perlengkapan Rumah</field>
+            <field name="parent_id" ref="cat_laundry"/>
+        </record>
+
+        <record id="cat_materials" model="product.category">
+            <field name="name">Bahan Laundry</field>
+            <field name="parent_id" ref="product.product_category_goods"/>
+        </record>
+
+        <!-- A. PRODUK LAYANAN LAUNDRY -->
+        <!-- Layanan Kiloan & Reguler -->
+        <record id="product_cuci_kiloan" model="product.template">
+            <field name="name">Cuci Kiloan</field>
+            <field name="default_code">SRV-WSH-001</field>
+            <field name="type">service</field>
+            <field name="categ_id" ref="cat_laundry"/>
+            <field name="uom_id" ref="uom.product_uom_kgm"/>
+            <field name="list_price">8000.0</field>
+            <field name="sale_ok" eval="True"/>
+            <field name="purchase_ok" eval="False"/>
+            <field name="active" eval="True"/>
+        </record>
+
+        <record id="product_cuci_lipat" model="product.template">
+            <field name="name">Cuci Lipat</field>
+            <field name="default_code">SRV-WSH-002</field>
+            <field name="type">service</field>
+            <field name="categ_id" ref="cat_laundry"/>
+            <field name="uom_id" ref="uom.product_uom_kgm"/>
+            <field name="list_price">0.0</field>
+            <field name="sale_ok" eval="False"/>
+            <field name="purchase_ok" eval="False"/>
+            <field name="active" eval="True"/>
+        </record>
+
+        <record id="product_cuci_setrika" model="product.template">
+            <field name="name">Cuci Setrika</field>
+            <field name="default_code">SRV-WSH-003</field>
+            <field name="type">service</field>
+            <field name="categ_id" ref="cat_laundry"/>
+            <field name="uom_id" ref="uom.product_uom_kgm"/>
+            <field name="list_price">10000.0</field>
+            <field name="sale_ok" eval="True"/>
+            <field name="purchase_ok" eval="False"/>
+            <field name="active" eval="True"/>
+        </record>
+
+        <record id="product_setrika_saja" model="product.template">
+            <field name="name">Setrika Saja</field>
+            <field name="default_code">SRV-IRN-001</field>
+            <field name="type">service</field>
+            <field name="categ_id" ref="cat_laundry"/>
+            <field name="uom_id" ref="uom.product_uom_kgm"/>
+            <field name="list_price">6000.0</field>
+            <field name="sale_ok" eval="True"/>
+            <field name="purchase_ok" eval="False"/>
+            <field name="active" eval="True"/>
+        </record>
+
+        <record id="product_cuci_satuan" model="product.template">
+            <field name="name">Cuci Satuan</field>
+            <field name="default_code">SRV-PCS-001</field>
+            <field name="type">service</field>
+            <field name="categ_id" ref="cat_laundry"/>
+            <field name="uom_id" ref="uom.product_uom_unit"/>
+            <field name="list_price">0.0</field>
+            <field name="sale_ok" eval="False"/>
+            <field name="purchase_ok" eval="False"/>
+            <field name="active" eval="True"/>
+        </record>
+
+        <record id="product_dry_cleaning" model="product.template">
+            <field name="name">Dry Cleaning</field>
+            <field name="default_code">SRV-DRY-001</field>
+            <field name="type">service</field>
+            <field name="categ_id" ref="cat_laundry"/>
+            <field name="uom_id" ref="uom.product_uom_unit"/>
+            <field name="list_price">0.0</field>
+            <field name="sale_ok" eval="False"/>
+            <field name="purchase_ok" eval="False"/>
+            <field name="active" eval="True"/>
+        </record>
+
+        <!-- Kategori Karpet & Perlengkapan Rumah -->
+        <record id="product_karpet" model="product.template">
+            <field name="name">Karpet</field>
+            <field name="default_code">SRV-HME-001</field>
+            <field name="type">service</field>
+            <field name="categ_id" ref="cat_home"/>
+            <field name="uom_id" ref="uom.product_uom_square_meter"/>
+            <field name="list_price">0.0</field>
+            <field name="sale_ok" eval="False"/>
+            <field name="purchase_ok" eval="False"/>
+            <field name="active" eval="True"/>
+        </record>
+
+        <record id="product_selimut" model="product.template">
+            <field name="name">Selimut</field>
+            <field name="default_code">SRV-HME-002</field>
+            <field name="type">service</field>
+            <field name="categ_id" ref="cat_home"/>
+            <field name="uom_id" ref="uom.product_uom_unit"/>
+            <field name="list_price">25000.0</field>
+            <field name="sale_ok" eval="True"/>
+            <field name="purchase_ok" eval="False"/>
+            <field name="active" eval="True"/>
+        </record>
+
+        <record id="product_bed_cover" model="product.template">
+            <field name="name">Bed Cover</field>
+            <field name="default_code">SRV-HME-003</field>
+            <field name="type">service</field>
+            <field name="categ_id" ref="cat_home"/>
+            <field name="uom_id" ref="uom.product_uom_unit"/>
+            <field name="list_price">0.0</field>
+            <field name="sale_ok" eval="False"/>
+            <field name="purchase_ok" eval="False"/>
+            <field name="active" eval="True"/>
+        </record>
+
+        <record id="product_sprei" model="product.template">
+            <field name="name">Sprei</field>
+            <field name="default_code">SRV-HME-004</field>
+            <field name="type">service</field>
+            <field name="categ_id" ref="cat_home"/>
+            <field name="uom_id" ref="uom_set"/>
+            <field name="list_price">0.0</field>
+            <field name="sale_ok" eval="False"/>
+            <field name="purchase_ok" eval="False"/>
+            <field name="active" eval="True"/>
+        </record>
+
+        <record id="product_bantal" model="product.template">
+            <field name="name">Bantal</field>
+            <field name="default_code">SRV-HME-005</field>
+            <field name="type">service</field>
+            <field name="categ_id" ref="cat_home"/>
+            <field name="uom_id" ref="uom.product_uom_unit"/>
+            <field name="list_price">0.0</field>
+            <field name="sale_ok" eval="False"/>
+            <field name="purchase_ok" eval="False"/>
+            <field name="active" eval="True"/>
+        </record>
+
+        <record id="product_guling" model="product.template">
+            <field name="name">Guling</field>
+            <field name="default_code">SRV-HME-006</field>
+            <field name="type">service</field>
+            <field name="categ_id" ref="cat_home"/>
+            <field name="uom_id" ref="uom.product_uom_unit"/>
+            <field name="list_price">0.0</field>
+            <field name="sale_ok" eval="False"/>
+            <field name="purchase_ok" eval="False"/>
+            <field name="active" eval="True"/>
+        </record>
+
+        <record id="product_handuk" model="product.template">
+            <field name="name">Handuk</field>
+            <field name="default_code">SRV-HME-007</field>
+            <field name="type">service</field>
+            <field name="categ_id" ref="cat_home"/>
+            <field name="uom_id" ref="uom.product_uom_unit"/>
+            <field name="list_price">0.0</field>
+            <field name="sale_ok" eval="False"/>
+            <field name="purchase_ok" eval="False"/>
+            <field name="active" eval="True"/>
+        </record>
+
+        <!-- B. PRODUK BAHAN LAUNDRY (INVENTORY) -->
+        <record id="product_deterjen_bubuk" model="product.template">
+            <field name="name">Deterjen Bubuk</field>
+            <field name="default_code">MAT-DET-001</field>
+            <field name="type">consu</field>
+            <field name="is_storable" eval="True"/>
+            <field name="tracking">lot</field>
+            <field name="use_expiration_date" eval="True"/>
+            <field name="categ_id" ref="cat_materials"/>
+            <field name="uom_id" ref="uom.product_uom_kgm"/>
+            <field name="list_price">0.0</field>
+            <field name="sale_ok" eval="False"/>
+            <field name="purchase_ok" eval="True"/>
+            <field name="active" eval="True"/>
+        </record>
+
+        <record id="product_deterjen_cair" model="product.template">
+            <field name="name">Deterjen Cair</field>
+            <field name="default_code">MAT-DET-002</field>
+            <field name="type">consu</field>
+            <field name="is_storable" eval="True"/>
+            <field name="tracking">lot</field>
+            <field name="use_expiration_date" eval="True"/>
+            <field name="categ_id" ref="cat_materials"/>
+            <field name="uom_id" ref="uom.product_uom_litre"/>
+            <field name="list_price">0.0</field>
+            <field name="sale_ok" eval="False"/>
+            <field name="purchase_ok" eval="True"/>
+            <field name="active" eval="True"/>
+        </record>
+
+        <record id="product_pelembut_pewangi" model="product.template">
+            <field name="name">Pelembut dan Pewangi</field>
+            <field name="default_code">MAT-SFT-001</field>
+            <field name="type">consu</field>
+            <field name="is_storable" eval="True"/>
+            <field name="tracking">lot</field>
+            <field name="use_expiration_date" eval="True"/>
+            <field name="categ_id" ref="cat_materials"/>
+            <field name="uom_id" ref="uom.product_uom_litre"/>
+            <field name="list_price">0.0</field>
+            <field name="sale_ok" eval="False"/>
+            <field name="purchase_ok" eval="True"/>
+            <field name="active" eval="True"/>
+        </record>
+
+        <record id="product_pelicin_parfum_setrika" model="product.template">
+            <field name="name">Pelicin dan Parfum Setrika</field>
+            <field name="default_code">MAT-PRF-001</field>
+            <field name="type">consu</field>
+            <field name="is_storable" eval="True"/>
+            <field name="tracking">lot</field>
+            <field name="use_expiration_date" eval="True"/>
+            <field name="categ_id" ref="cat_materials"/>
+            <field name="uom_id" ref="uom.product_uom_litre"/>
+            <field name="list_price">0.0</field>
+            <field name="sale_ok" eval="False"/>
+            <field name="purchase_ok" eval="True"/>
+            <field name="active" eval="True"/>
+        </record>
+
+        <record id="product_pembersih_noda_khusus" model="product.template">
+            <field name="name">Pembersih Noda Khusus</field>
+            <field name="default_code">MAT-STN-001</field>
+            <field name="type">consu</field>
+            <field name="is_storable" eval="True"/>
+            <field name="tracking">lot</field>
+            <field name="use_expiration_date" eval="True"/>
+            <field name="categ_id" ref="cat_materials"/>
+            <field name="uom_id" ref="uom.product_uom_litre"/>
+            <field name="list_price">0.0</field>
+            <field name="sale_ok" eval="False"/>
+            <field name="purchase_ok" eval="True"/>
+            <field name="active" eval="True"/>
+        </record>
+    </data>
+</odoo>
+

@@ -1,0 +1,1428 @@
+{
+  "info": {
+    "name": "LaundryFlow API - Complete Test Suite",
+    "_postman_id": "c1f72b9a-4e2a-4f51-933e-d890a5e84123",
+    "description": "Comprehensive Postman Test Suite untuk LaundryFlow Odoo 20 API.\nMencakup: Authentication, Customer, Product/Service, Inventory, Order Calculation, dan Same Day Service.\nSemua token dan password menggunakan variable placeholder `{{authToken}}`, `{{username}}`, `{{password}}`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://117.53.47.93:8069",
+      "type": "string"
+    },
+    {
+      "key": "dbName",
+      "value": "odoo20",
+      "type": "string"
+    },
+    {
+      "key": "username",
+      "value": "admin",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customerToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customerId",
+      "value": "11",
+      "type": "string"
+    },
+    {
+      "key": "serviceProductId",
+      "value": "12",
+      "type": "string"
+    },
+    {
+      "key": "carpetProductId",
+      "value": "86",
+      "type": "string"
+    },
+    {
+      "key": "blanketProductId",
+      "value": "14",
+      "type": "string"
+    },
+    {
+      "key": "materialProductId",
+      "value": "92",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Authentication",
+      "description": "Pengujian autentikasi, login valid, login invalid, dan manajemen session_id.",
+      "item": [
+        {
+          "name": "1.1 Login Valid (Simpan authToken)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {\n    pm.response.to.have.status(200);\n});",
+                  "pm.test(\"Response has success true and session_id\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.success).to.be.true;\n    pm.expect(jsonData.data).to.have.property('session_id');\n    pm.environment.set('authToken', jsonData.data.session_id);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"{{username}}\",\n  \"password\": \"{{password}}\",\n  \"db\": \"{{dbName}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "1.2 Login Password Salah (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 401\", function () {\n    pm.response.to.have.status(401);\n});",
+                  "pm.test(\"Error response message exists\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.success).to.be.false;\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"{{username}}\",\n  \"password\": \"WRONG_PASSWORD_XYZ\",\n  \"db\": \"{{dbName}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "1.3 Login User Tidak Ditemukan (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 401\", function () {\n    pm.response.to.have.status(401);\n});",
+                  "pm.test(\"Response success is false\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.success).to.be.false;\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"user_not_exist_9999@laundry.test\",\n  \"password\": \"any\",\n  \"db\": \"{{dbName}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "1.4 Login Request Body Kosong (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {\n    pm.response.to.have.status(400);\n});",
+                  "pm.test(\"Response success is false\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.success).to.be.false;\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "auth",
+                "login"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Customer",
+      "description": "Pengujian pencarian dan pembuatan data pelanggan.",
+      "item": [
+        {
+          "name": "2.1 Cari Pelanggan (Search)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {\n    pm.response.to.have.status(200);\n});",
+                  "pm.test(\"Data array exists and has fields\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.success).to.be.true;\n    pm.expect(jsonData.data).to.be.an('array');\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/customers/search?q=Rian",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "customers",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "Rian"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "2.2 Buat Pelanggan Baru",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {\n    pm.response.to.have.status(201);\n});",
+                  "pm.test(\"Customer ID generated\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.success).to.be.true;\n    pm.expect(jsonData.data).to.have.property('id');\n    pm.environment.set('customerId', jsonData.data.id);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Pelanggan Staging Test\",\n  \"phone\": \"089912345678\",\n  \"address\": \"Jl. Pengujian No. 12\",\n  \"city\": \"Surabaya\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/customers/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "customers",
+                "create"
+              ]
+            }
+          }
+        },
+        {
+          "name": "2.3 Buat Pelanggan Tanpa Nama (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {\n    pm.response.to.have.status(400);\n});",
+                  "pm.test(\"Response success is false\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.success).to.be.false;\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"089912345678\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/customers/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "customers",
+                "create"
+              ]
+            }
+          }
+        },
+        {
+          "name": "2.4 Akses Customer Tanpa Token (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 401\", function () {\n    pm.response.to.have.status(401);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/customers/search?q=test",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "customers",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "test"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Product / Service",
+      "description": "Pengujian katalog layanan laundry: daftar layanan, detail, data kosong, not found, dan isolasi bahan inventory.",
+      "item": [
+        {
+          "name": "3.1 Daftar Layanan Laundry (Bahan Inventory Tidak Muncul)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {\n    pm.response.to.have.status(200);\n});",
+                  "pm.test(\"Response structure valid\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.success).to.be.true;\n    pm.expect(jsonData.data).to.be.an('array');\n});",
+                  "pm.test(\"Inventory materials excluded from service catalog\", function () {\n    var jsonData = pm.response.json();\n    jsonData.data.forEach(function(item) {\n        pm.expect(item.sku || '').to.not.include('MAT-');\n        pm.expect(item.category || '').to.not.equal('Bahan Laundry');\n    });\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "products"
+              ]
+            }
+          }
+        },
+        {
+          "name": "3.2 Detail Layanan Laundry (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {\n    pm.response.to.have.status(200);\n});",
+                  "pm.test(\"Service fields exist\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.success).to.be.true;\n    pm.expect(jsonData.data).to.have.property('id');\n    pm.expect(jsonData.data).to.have.property('name');\n    pm.expect(jsonData.data).to.have.property('unit_price');\n    pm.expect(jsonData.data).to.have.property('uom');\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/products/{{serviceProductId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "products",
+                "{{serviceProductId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "3.3 Daftar Layanan Kosong (Query Tidak Cocok)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {\n    pm.response.to.have.status(200);\n});",
+                  "pm.test(\"Data array is empty\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.success).to.be.true;\n    pm.expect(jsonData.data).to.be.an('array').that.is.empty;\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/products?q=NON_EXISTENT_QUERY_XYZ",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "NON_EXISTENT_QUERY_XYZ"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "3.4 Detail Layanan Tidak Ditemukan (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 404\", function () {\n    pm.response.to.have.status(404);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/products/999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "products",
+                "999999"
+              ]
+            }
+          }
+        },
+        {
+          "name": "3.5 Akses Katalog Tanpa Autentikasi (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 401\", function () {\n    pm.response.to.have.status(401);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "products"
+              ]
+            }
+          }
+        },
+        {
+          "name": "3.6 Perbarui / Tetapkan Harga Layanan (PUT /api/laundry/products/:id)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {\n    pm.response.to.have.status(200);\n});",
+                  "pm.test(\"Updated price reflected in response\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.success).to.be.true;\n    pm.expect(jsonData.data.unit_price).to.eql(8500);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 8500\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/products/11",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "products",
+                "11"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Inventory",
+      "description": "Pengujian inventory bahan laundry: SKU, harga beli, harga jual, stok aktual, UoM, produk stok nol, batch & kedaluwarsa, dan hak akses.",
+      "item": [
+        {
+          "name": "4.1 Daftar Bahan Laundry (Stok Aktual & Harga Beli)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {\n    pm.response.to.have.status(200);\n});",
+                  "pm.test(\"Response contains data array\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.data).to.be.an('array');\n});",
+                  "pm.test(\"Materials have SKU, cost, price, stock, uom, and zero stock support\", function () {\n    var jsonData = pm.response.json();\n    jsonData.data.forEach(function(mat) {\n        pm.expect(mat).to.have.property('id');\n        pm.expect(mat).to.have.property('sku');\n        pm.expect(mat).to.have.property('name');\n        pm.expect(mat).to.have.property('purchase_price');\n        pm.expect(mat).to.have.property('sale_price');\n        pm.expect(mat).to.have.property('quantity_on_hand');\n        pm.expect(mat).to.have.property('uom');\n        pm.expect(mat).to.have.property('batches');\n        pm.expect(mat.quantity_on_hand).to.be.at.least(0);\n    });\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/inventory",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "inventory"
+              ]
+            }
+          }
+        },
+        {
+          "name": "4.2 Detail Bahan Laundry (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {\n    pm.response.to.have.status(200);\n});",
+                  "pm.test(\"Detail material fields exist\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.data).to.have.property('sku');\n    pm.expect(jsonData.data).to.have.property('batches');\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/inventory/{{materialProductId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "inventory",
+                "{{materialProductId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "4.3 Verifikasi Batch & Tanggal Kedaluwarsa",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {\n    pm.response.to.have.status(200);\n});",
+                  "pm.test(\"Batch items have valid lot_id, batch_number, quantity, status\", function () {\n    var jsonData = pm.response.json();\n    jsonData.data.forEach(function(mat) {\n        mat.batches.forEach(function(b) {\n            pm.expect(b).to.have.property('lot_id');\n            pm.expect(b).to.have.property('batch_number');\n            pm.expect(b).to.have.property('quantity');\n            pm.expect(b).to.have.property('expiration_status');\n            pm.expect(['safe', 'expiring_soon', 'expired', 'unknown']).to.include(b.expiration_status);\n        });\n    });\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/inventory",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "inventory"
+              ]
+            }
+          }
+        },
+        {
+          "name": "4.4 Akses Inventory Tanpa Token (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 401\", function () {\n    pm.response.to.have.status(401);\n});",
+                  "pm.test(\"Error response message exists\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.error).to.equal('Unauthorized');\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/inventory",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "inventory"
+              ]
+            }
+          }
+        },
+        {
+          "name": "4.5 Akses Inventory oleh Pelanggan / User Tanpa Izin (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 403 or 401\", function () {\n    pm.expect([401, 403]).to.include(pm.response.code);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/inventory",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "inventory"
+              ]
+            }
+          }
+        },
+        {
+          "name": "4.6 Detail Bahan Laundry Tidak Ditemukan (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 404\", function () {\n    pm.response.to.have.status(404);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/inventory/999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "inventory",
+                "999999"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Order",
+      "description": "Pengujian pembuatan pesanan, perhitungan multi-detail (kg, pcs, set, m\u00b2), validasi angka nol/negatif, dan proteksi manipulasi harga.",
+      "item": [
+        {
+          "name": "5.1 Order Satu Layanan (Kiloan)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 or 201\", function () {\n    pm.expect([200, 201]).to.include(pm.response.code);\n});",
+                  "pm.test(\"Order ID and subtotal verified\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.success).to.be.true;\n    pm.expect(jsonData.data).to.have.property('id');\n    pm.expect(jsonData.data.total_amount).to.be.above(0);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"{{customerId}}\",\n  \"service_speed\": \"regular\",\n  \"lines\": [\n    {\n      \"product_template_id\": \"{{serviceProductId}}\",\n      \"weight\": 3.0\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "orders"
+              ]
+            }
+          }
+        },
+        {
+          "name": "5.2 Order Beberapa Layanan (Multi-Detail: Cuci Setrika + Karpet + Selimut)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 or 201\", function () {\n    pm.expect([200, 201]).to.include(pm.response.code);\n});",
+                  "pm.test(\"Subtotals and Total Amount calculated accurately\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.success).to.be.true;\n    pm.expect(jsonData.data.lines).to.be.an('array').with.lengthOf(3);\n    var calculatedTotal = jsonData.data.lines.reduce(function(acc, l) { return acc + l.subtotal; }, 0) + (jsonData.data.service_speed_fee || 0);\n    pm.expect(jsonData.data.total_amount).to.equal(calculatedTotal);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"{{customerId}}\",\n  \"service_speed\": \"regular\",\n  \"lines\": [\n    {\n      \"product_template_id\": \"{{serviceProductId}}\",\n      \"weight\": 3.0\n    },\n    {\n      \"product_template_id\": \"{{carpetProductId}}\",\n      \"length\": 2.0,\n      \"width\": 3.0\n    },\n    {\n      \"product_template_id\": \"{{blanketProductId}}\",\n      \"quantity\": 1.0\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "orders"
+              ]
+            }
+          }
+        },
+        {
+          "name": "5.3 Perhitungan Berdasarkan Kg (Berat * Harga/Kg)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 or 201\", function () {\n    pm.expect([200, 201]).to.include(pm.response.code);\n});",
+                  "pm.test(\"Weight subtotal matches unit_price * weight\", function () {\n    var jsonData = pm.response.json();\n    var line = jsonData.data.lines[0];\n    pm.expect(line.subtotal).to.equal(line.price_unit * line.weight);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"{{customerId}}\",\n  \"service_speed\": \"regular\",\n  \"lines\": [\n    {\n      \"product_template_id\": \"{{serviceProductId}}\",\n      \"weight\": 4.5\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "orders"
+              ]
+            }
+          }
+        },
+        {
+          "name": "5.4 Perhitungan Berdasarkan Pcs (Jumlah * Harga/Pcs)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 or 201\", function () {\n    pm.expect([200, 201]).to.include(pm.response.code);\n});",
+                  "pm.test(\"Pcs subtotal matches unit_price * quantity\", function () {\n    var jsonData = pm.response.json();\n    var line = jsonData.data.lines[0];\n    pm.expect(line.subtotal).to.equal(line.price_unit * line.quantity);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"{{customerId}}\",\n  \"service_speed\": \"regular\",\n  \"lines\": [\n    {\n      \"product_template_id\": \"{{blanketProductId}}\",\n      \"quantity\": 2.0\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "orders"
+              ]
+            }
+          }
+        },
+        {
+          "name": "5.5 Perhitungan Karpet m\u00b2 (Panjang * Lebar * Harga/m\u00b2)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 or 201\", function () {\n    pm.expect([200, 201]).to.include(pm.response.code);\n});",
+                  "pm.test(\"Carpet area is length * width and subtotal is area * price_unit\", function () {\n    var jsonData = pm.response.json();\n    var line = jsonData.data.lines[0];\n    pm.expect(line.area).to.equal(2.0 * 3.0);\n    pm.expect(line.subtotal).to.equal(line.area * line.price_unit);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"{{customerId}}\",\n  \"service_speed\": \"regular\",\n  \"lines\": [\n    {\n      \"product_template_id\": \"{{carpetProductId}}\",\n      \"length\": 2.0,\n      \"width\": 3.0\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "orders"
+              ]
+            }
+          }
+        },
+        {
+          "name": "5.6 Order Karpet Ukuran Nol Ditolak (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {\n    pm.response.to.have.status(400);\n});",
+                  "pm.test(\"Response success is false\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.success).to.be.false;\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"{{customerId}}\",\n  \"service_speed\": \"regular\",\n  \"lines\": [\n    {\n      \"product_template_id\": \"{{carpetProductId}}\",\n      \"length\": 0.0,\n      \"width\": 3.0\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "orders"
+              ]
+            }
+          }
+        },
+        {
+          "name": "5.7 Order Karpet Ukuran Negatif Ditolak (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {\n    pm.response.to.have.status(400);\n});",
+                  "pm.test(\"Response success is false\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.success).to.be.false;\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"{{customerId}}\",\n  \"service_speed\": \"regular\",\n  \"lines\": [\n    {\n      \"product_template_id\": \"{{carpetProductId}}\",\n      \"length\": -2.0,\n      \"width\": 3.0\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "orders"
+              ]
+            }
+          }
+        },
+        {
+          "name": "5.8 Proteksi Manipulasi Harga dari Flutter (Backend Menghitung Ulang)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 or 201\", function () {\n    pm.expect([200, 201]).to.include(pm.response.code);\n});",
+                  "pm.test(\"Fake total_amount Rp 100 from client overridden by backend\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.data.total_amount).to.not.equal(100.0);\n    pm.expect(jsonData.data.total_amount).to.be.above(100.0);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"{{customerId}}\",\n  \"service_speed\": \"regular\",\n  \"total_amount\": 100.0,\n  \"lines\": [\n    {\n      \"product_template_id\": \"{{serviceProductId}}\",\n      \"weight\": 5.0,\n      \"price_unit\": 10.0,\n      \"subtotal\": 50.0\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "orders"
+              ]
+            }
+          }
+        },
+        {
+          "name": "5.9 Daftar Pesanan Laundry (GET /api/laundry/orders)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {\n    pm.response.to.have.status(200);\n});",
+                  "pm.test(\"Orders list returned\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.success).to.be.true;\n    pm.expect(jsonData.data).to.be.an(\"array\");\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "orders"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Same Day Service",
+      "description": "Pengujian pilihan kecepatan pengerjaan pesanan: Reguler vs Same Day, validasi ketersediaan, dan biaya surcharge snapshot.",
+      "item": [
+        {
+          "name": "6.1 Daftar Opsi Kecepatan Pengerjaan (GET /api/laundry/service-speeds)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {\n    pm.response.to.have.status(200);\n});",
+                  "pm.test(\"Contains regular and same_day options\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.success).to.be.true;\n    var codes = jsonData.data.map(function(s) { return s.code; });\n    pm.expect(codes).to.include('regular');\n    pm.expect(codes).to.include('same_day');\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/service-speeds",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "service-speeds"
+              ]
+            }
+          }
+        },
+        {
+          "name": "6.2 Order Pilihan Reguler (Fee = 0)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 or 201\", function () {\n    pm.expect([200, 201]).to.include(pm.response.code);\n});",
+                  "pm.test(\"Service speed is regular and fee is 0\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.data.service_speed).to.equal('regular');\n    pm.expect(jsonData.data.service_speed_fee || 0).to.equal(0);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"{{customerId}}\",\n  \"service_speed\": \"regular\",\n  \"lines\": [\n    {\n      \"product_template_id\": \"{{serviceProductId}}\",\n      \"weight\": 2.0\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "orders"
+              ]
+            }
+          }
+        },
+        {
+          "name": "6.3 Order Pilihan Same Day Service",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 or 201\", function () {\n    pm.expect([200, 201]).to.include(pm.response.code);\n});",
+                  "pm.test(\"Service speed is same_day\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.data.service_speed).to.equal('same_day');\n    pm.expect(jsonData.data).to.have.property('service_speed_fee');\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"{{customerId}}\",\n  \"service_speed\": \"same_day\",\n  \"lines\": [\n    {\n      \"product_template_id\": \"{{serviceProductId}}\",\n      \"weight\": 2.0\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "orders"
+              ]
+            }
+          }
+        },
+        {
+          "name": "6.4 Order Pilihan Kecepatan Tidak Valid Ditolak (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {\n    pm.response.to.have.status(400);\n});",
+                  "pm.test(\"Error message indicates invalid service speed\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.success).to.be.false;\n    pm.expect(jsonData.message).to.include('service_speed');\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"{{customerId}}\",\n  \"service_speed\": \"express_super_kilat\",\n  \"lines\": [\n    {\n      \"product_template_id\": \"{{serviceProductId}}\",\n      \"weight\": 2.0\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "orders"
+              ]
+            }
+          }
+        },
+        {
+          "name": "6.5 Akses Service Speeds Tanpa Token (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 401\", function () {\n    pm.response.to.have.status(401);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/service-speeds",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "service-speeds"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

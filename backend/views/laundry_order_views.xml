@@ -6,10 +6,13 @@
         <field name="arch" type="xml">
             <list string="Pesanan Laundry">
                 <field name="name"/>
+                <field name="order_date"/>
                 <field name="partner_id"/>
-                <field name="service_type"/>
+                <field name="service_speed"/>
+                <field name="service_speed_fee" optional="show"/>
                 <field name="weight"/>
                 <field name="total_amount"/>
+                <field name="user_id" widget="many2one_avatar_user"/>
                 <field name="state"/>
             </list>
         </field>
@@ -32,19 +35,50 @@
                     <group>
                         <group>
                             <field name="partner_id"/>
-                            <field name="service_type"/>
-                            <field name="weight"/>
-                            <field name="price_per_kg"/>
+                            <field name="order_date"/>
+                            <field name="service_speed"/>
+                            <field name="service_speed_fee" invisible="service_speed != 'same_day'"/>
+                            <field name="user_id"/>
                         </group>
                         <group>
                             <field name="total_amount"/>
+                            <field name="weight"/>
                             <field name="currency_id" invisible="1"/>
                             <field name="invoice_id"/>
                         </group>
                     </group>
-                    <group>
-                        <field name="notes"/>
-                    </group>
+                    <notebook>
+                        <page string="Detail Layanan">
+                            <field name="line_ids">
+                                <list editable="bottom">
+                                    <field name="product_template_id"/>
+                                    <field name="item_details"/>
+                                    <field name="pricing_type"/>
+                                    <field name="length" invisible="pricing_type != 'area'"/>
+                                    <field name="width" invisible="pricing_type != 'area'"/>
+                                    <field name="area" invisible="pricing_type != 'area'"/>
+                                    <field name="quantity"/>
+                                    <field name="weight" invisible="pricing_type != 'weight'"/>
+                                    <field name="uom_id"/>
+                                    <field name="price_unit"/>
+                                    <field name="subtotal"/>
+                                    <field name="currency_id" column_invisible="True"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Detail Barang &amp; Catatan">
+                            <group>
+                                <field name="item_details"/>
+                                <field name="notes"/>
+                            </group>
+                        </page>
+                        <page string="Legacy Single-Service Info" invisible="not service_type and not price_per_kg">
+                            <group>
+                                <field name="service_type"/>
+                                <field name="price_per_kg"/>
+                            </group>
+                        </page>
+                    </notebook>
                 </sheet>
             </form>
         </field>

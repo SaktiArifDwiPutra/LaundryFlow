@@ -167,8 +167,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  if (order.priority == OrderPriority.express) ...[
-                    const PriorityBadge(),
+                  if (order.priority == OrderPriority.express || order.priority == OrderPriority.sameDay) ...[
+                    PriorityBadge(label: order.priority.label),
                     const SizedBox(width: 8),
                   ],
                   FulfillmentBadge(fulfillment: order.fulfillment),
