@@ -17,6 +17,8 @@
         "data/product_data.xml",
         "views/laundry_order_views.xml",
         "views/res_config_settings_views.xml",
+        "views/stock_lot_views.xml",
+        "views/product_material_views.xml",
     ],
     "installable": True,
     "application": True,

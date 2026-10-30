@@ -4,3 +4,5 @@ from . import test_product_api
 from . import test_laundry_pricing
 from . import test_laundry_order
 from . import test_service_speed
+from . import test_material_inventory
+

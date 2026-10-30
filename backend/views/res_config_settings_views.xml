@@ -18,6 +18,14 @@
                             </div>
                         </setting>
                     </block>
+                    <block title="Pengelolaan Inventory &amp; Kedaluwarsa" name="inventory_expiry_settings">
+                        <setting id="laundry_expiry_threshold_setting" string="Peringatan Kedaluwarsa" help="Atur batas hari untuk kategori batch segera kedaluwarsa (expiring soon).">
+                            <div>
+                                <label for="laundry_expiring_soon_days" string="Ambang Batas Hari: "/>
+                                <field name="laundry_expiring_soon_days" class="oe_inline"/> hari
+                            </div>
+                        </setting>
+                    </block>
                 </app>
             </xpath>
         </field>

@@ -192,6 +192,7 @@
             <field name="type">consu</field>
             <field name="is_storable" eval="True"/>
             <field name="tracking">lot</field>
+            <field name="use_expiration_date" eval="True"/>
             <field name="categ_id" ref="cat_materials"/>
             <field name="uom_id" ref="uom.product_uom_kgm"/>
             <field name="list_price">0.0</field>
@@ -206,6 +207,7 @@
             <field name="type">consu</field>
             <field name="is_storable" eval="True"/>
             <field name="tracking">lot</field>
+            <field name="use_expiration_date" eval="True"/>
             <field name="categ_id" ref="cat_materials"/>
             <field name="uom_id" ref="uom.product_uom_litre"/>
             <field name="list_price">0.0</field>
@@ -220,6 +222,7 @@
             <field name="type">consu</field>
             <field name="is_storable" eval="True"/>
             <field name="tracking">lot</field>
+            <field name="use_expiration_date" eval="True"/>
             <field name="categ_id" ref="cat_materials"/>
             <field name="uom_id" ref="uom.product_uom_litre"/>
             <field name="list_price">0.0</field>
@@ -234,6 +237,7 @@
             <field name="type">consu</field>
             <field name="is_storable" eval="True"/>
             <field name="tracking">lot</field>
+            <field name="use_expiration_date" eval="True"/>
             <field name="categ_id" ref="cat_materials"/>
             <field name="uom_id" ref="uom.product_uom_litre"/>
             <field name="list_price">0.0</field>
@@ -248,6 +252,7 @@
             <field name="type">consu</field>
             <field name="is_storable" eval="True"/>
             <field name="tracking">lot</field>
+            <field name="use_expiration_date" eval="True"/>
             <field name="categ_id" ref="cat_materials"/>
             <field name="uom_id" ref="uom.product_uom_litre"/>
             <field name="list_price">0.0</field>

@@ -17,6 +17,12 @@ class ResConfigSettings(models.TransientModel):
         default=0.0,
         help="Biaya tambahan untuk jenis pengerjaan Same Day Service jika sudah dikonfirmasi secara operasional. Default 0.",
     )
+    laundry_expiring_soon_days = fields.Integer(
+        string="Batas Hari Segera Kedaluwarsa",
+        config_parameter="laundry.expiring_soon_days",
+        default=30,
+        help="Batas jumlah hari tersisa sebelum tanggal kedaluwarsa untuk dikategorikan sebagai 'Segera Kedaluwarsa' (expiring_soon).",
+    )
     currency_id = fields.Many2one(
         "res.currency",
         string="Mata Uang",
