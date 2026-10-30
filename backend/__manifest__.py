@@ -9,10 +9,12 @@
         "contacts",
         "account",
         "stock",
+        "product_expiry",
     ],
     "data": [
         "security/ir.access.csv",
         "data/sequence.xml",
+        "data/product_data.xml",
         "views/laundry_order_views.xml",
     ],
     "installable": True,
