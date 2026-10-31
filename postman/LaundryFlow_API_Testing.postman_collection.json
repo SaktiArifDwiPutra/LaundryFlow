@@ -837,6 +837,149 @@
               ]
             }
           }
+        },
+        {
+          "name": "4.7 Verifikasi Seluruh Status Kedaluwarsa Batch (Safe, Expiring Soon, Expired, Unknown)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {\n    pm.response.to.have.status(200);\n});",
+                  "pm.test(\"Batches have valid expiration statuses\", function () {\n    var jsonData = pm.response.json();\n    var batches = jsonData.data.batches;\n    pm.expect(batches).to.be.an(\"array\");\n    var statuses = batches.map(function(b) { return b.expiration_status; });\n    pm.expect(statuses).to.include.oneOf([\"safe\", \"expiring_soon\", \"expired\", \"unknown\"]);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/inventory/93",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "inventory",
+                "93"
+              ]
+            }
+          }
+        },
+        {
+          "name": "4.8 Verifikasi Peringatan Stok Rendah & Batas Minimum (is_low_stock)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {\n    pm.response.to.have.status(200);\n});",
+                  "pm.test(\"Low stock fields exist\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.data).to.have.property(\"min_stock_qty\");\n    pm.expect(jsonData.data).to.have.property(\"is_low_stock\");\n    pm.expect(jsonData.data).to.have.property(\"has_expired_batches\");\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/inventory/93",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "inventory",
+                "93"
+              ]
+            }
+          }
+        },
+        {
+          "name": "4.9 Verifikasi Bahan Stok Nol Tetap Ditampilkan",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {\n    pm.response.to.have.status(200);\n});",
+                  "pm.test(\"Zero stock items displayed\", function () {\n    var jsonData = pm.response.json();\n    var zeroItems = jsonData.data.filter(function(item) { return item.quantity_on_hand === 0; });\n    pm.expect(zeroItems.length).to.be.above(0);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/inventory",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "inventory"
+              ]
+            }
+          }
+        },
+        {
+          "name": "4.10 Verifikasi Supplier dan Harga Beli Internal (standard_price)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {\n    pm.response.to.have.status(200);\n});",
+                  "pm.test(\"Internal purchase price and supplier present\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.data).to.have.property(\"purchase_price\");\n    pm.expect(jsonData.data).to.have.property(\"supplier\");\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/laundry/inventory/93",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "laundry",
+                "inventory",
+                "93"
+              ]
+            }
+          }
         }
       ]
     },

@@ -46,6 +46,7 @@ class TestInventoryApi(TransactionCase):
         # Ambil produk bahan laundry
         cls.mat_powder = cls.env['product.product'].search([('default_code', '=', 'MAT-DET-001')], limit=1)
         cls.mat_liquid = cls.env['product.product'].search([('default_code', '=', 'MAT-DET-002')], limit=1)
+        cls.mat_softener = cls.env['product.product'].search([('default_code', '=', 'MAT-SFT-001')], limit=1)
 
         # Supplier untuk pengujian
         cls.supplier = cls.env['res.partner'].create({
@@ -214,4 +215,92 @@ class TestInventoryApi(TransactionCase):
             ('categ_id.name', '=', 'Bahan Laundry')
         ], limit=1)
         self.assertFalse(non_existent)
+
+    def test_09_batch_without_expiration_date(self):
+        """Uji batch tanpa tanggal kedaluwarsa -> status unknown."""
+        today = fields.Date.context_today(self.mat_powder)
+        lot_no_exp = self.mat_powder.receive_batch(
+            lot_name='BATCH-NO-EXP-01',
+            qty=8.0,
+            receipt_date=today,
+            expiration_date=False,
+            supplier=self.supplier
+        )
+        req = self._mock_request(user=self.internal_user)
+        internal_locs = self.controller._get_internal_locations(req)
+        res_data = self.controller._serialize_product_inventory(self.mat_powder, internal_locs, req)
+        batches = {b['batch_number']: b for b in res_data['batches']}
+        self.assertIn('BATCH-NO-EXP-01', batches)
+        self.assertEqual(batches['BATCH-NO-EXP-01']['expiration_status'], 'unknown')
+        self.assertIsNone(batches['BATCH-NO-EXP-01']['expiration_date'])
+
+    def test_10_already_expired_batch(self):
+        """Uji batch yang sudah kedaluwarsa -> status expired."""
+        today = fields.Date.context_today(self.mat_powder)
+        now = fields.Datetime.now()
+        past_date = now - timedelta(days=10)
+        lot_exp = self.mat_powder.receive_batch(
+            lot_name='BATCH-EXPIRED-01',
+            qty=4.0,
+            receipt_date=today - timedelta(days=20),
+            expiration_date=past_date,
+            supplier=self.supplier
+        )
+        req = self._mock_request(user=self.internal_user)
+        internal_locs = self.controller._get_internal_locations(req)
+        res_data = self.controller._serialize_product_inventory(self.mat_powder, internal_locs, req)
+        batches = {b['batch_number']: b for b in res_data['batches']}
+        self.assertIn('BATCH-EXPIRED-01', batches)
+        self.assertEqual(batches['BATCH-EXPIRED-01']['expiration_status'], 'expired')
+
+    def test_11_low_stock_alert_and_min_stock(self):
+        """Uji peringatan stok rendah jika stok aktual <= min_stock_qty."""
+        mat = self.mat_softener
+        mat.set_min_stock(min_qty=50.0)
+        req = self._mock_request(user=self.internal_user)
+        internal_locs = self.controller._get_internal_locations(req)
+        res_data = self.controller._serialize_product_inventory(mat, internal_locs, req)
+        self.assertEqual(res_data['min_stock_qty'], 50.0)
+        self.assertTrue(res_data['is_low_stock'])
+
+    def test_12_duplicate_sku_rejected_by_orm(self):
+        """Uji validasi bahwa SKU duplikat pada bahan laundry ditolak oleh model."""
+        from odoo.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
+            self.env['product.product'].create({
+                'name': 'Deterjen Duplikat SKU',
+                'default_code': 'MAT-DET-001',  # SKU sudah digunakan oleh Deterjen Bubuk
+                'categ_id': self.mat_powder.categ_id.id,
+                'type': 'consu',
+                'uom_id': self.mat_powder.uom_id.id,
+            })
+
+    def test_13_monitoring_does_not_mutate_stock(self):
+        """Memastikan pemanggilan monitoring inventory tidak mengubah kuantitas stok produk."""
+        req = self._mock_request(user=self.internal_user)
+        internal_locs = self.controller._get_internal_locations(req)
+        stock_before = self.controller._serialize_product_inventory(self.mat_powder, internal_locs, req)['quantity_on_hand']
+        # Panggil serializer lagi
+        stock_after = self.controller._serialize_product_inventory(self.mat_powder, internal_locs, req)['quantity_on_hand']
+        self.assertEqual(stock_before, stock_after)
+
+    def test_14_order_creation_does_not_consume_materials(self):
+        """
+        Ketentuan Tugas 14:
+        Tidak ada pengurangan bahan otomatis per pembuatan order transaksi.
+        """
+        # Cek stok deterjen sebelum order
+        mat_stock_before = self.mat_powder.qty_available
+        srv_wash = self.env['product.template'].search([('type', '=', 'service'), ('sale_ok', '=', True)], limit=1)
+        if srv_wash:
+            self.env['laundry.order'].create({
+                'partner_id': self.supplier.id,
+                'service_speed': 'regular',
+                'line_ids': [(0, 0, {
+                    'product_template_id': srv_wash.id,
+                    'quantity': 5.0,
+                })]
+            })
+            # Stok deterjen harus tetap tidak berkurang
+            self.assertEqual(self.mat_powder.qty_available, mat_stock_before)
 

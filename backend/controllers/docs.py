@@ -948,8 +948,10 @@ class ApiDocsController(http.Controller):
                             "batch_number": {"type": "string", "description": "Nomor identifikasi batch/lot.", "example": "BATCH-LIQ-202610-01"},
                             "received_date": {"type": "string", "format": "date", "nullable": True, "description": "Tanggal penerimaan barang di gudang.", "example": "2026-10-15"},
                             "expiration_date": {"type": "string", "format": "date", "nullable": True, "description": "Tanggal kedaluwarsa batch (null jika tanpa kedaluwarsa).", "example": "2027-04-15"},
+                            "days_to_expiration": {"type": "integer", "nullable": True, "description": "Jumlah hari menuju tanggal kedaluwarsa.", "example": 165},
                             "quantity": {"type": "number", "description": "Jumlah fisik stok batch pada lokasi internal.", "example": 10.0},
-                            "expiration_status": {"type": "string", "enum": ["safe", "expiring_soon", "expired", "unknown"], "description": "Status kedaluwarsa batch.", "example": "safe"}
+                            "expiration_status": {"type": "string", "enum": ["safe", "expiring_soon", "expired", "unknown"], "description": "Status kedaluwarsa batch.", "example": "safe"},
+                            "supplier": {"type": "string", "nullable": True, "description": "Nama supplier yang menyediakan batch ini.", "example": "PT Kimia Laundry Nasional"}
                         }
                     },
                     "InventoryProductItem": {
@@ -961,9 +963,13 @@ class ApiDocsController(http.Controller):
                             "name": {"type": "string", "description": "Nama bahan laundry.", "example": "Deterjen Cair"},
                             "category": {"type": "string", "description": "Kategori bahan (`Bahan Laundry`).", "example": "Bahan Laundry"},
                             "quantity_on_hand": {"type": "number", "description": "Stok fisik aktual murni dari lokasi gudang internal Odoo.", "example": 25.0},
+                            "min_stock_qty": {"type": "number", "description": "Batas minimum stok untuk reordering alert.", "example": 10.0},
+                            "is_low_stock": {"type": "boolean", "description": "True jika stok aktual kurang dari atau sama dengan minimum stok.", "example": False},
+                            "has_expired_batches": {"type": "boolean", "description": "True jika ada batch kedaluwarsa dengan stok tersisa.", "example": False},
                             "uom": {"type": "string", "description": "Satuan ukuran bahan (kg, L).", "example": "L"},
                             "purchase_price": {"type": "number", "description": "Harga beli / Cost standar Odoo (standard_price). Bersifat rahasia internal dan dilarang untuk pelanggan.", "example": 18000.0},
                             "sale_price": {"type": "number", "description": "Harga jual jika relevan (list_price).", "example": 0.0},
+                            "supplier": {"type": "string", "nullable": True, "description": "Nama supplier utama bahan laundry.", "example": "PT Kimia Laundry Nasional"},
                             "batches": {
                                 "type": "array",
                                 "description": "Rincian seluruh batch/lot yang tercatat untuk bahan ini.",

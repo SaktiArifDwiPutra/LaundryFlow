@@ -79,6 +79,23 @@ class ProductTemplate(models.Model):
         except Exception:
             pass
 
+    @api.constrains('default_code')
+    def _check_material_sku_unique(self):
+        for prod in self:
+            if prod.default_code and prod.categ_id and (
+                prod.categ_id.name == 'Bahan Laundry' or
+                (prod.categ_id.parent_id and prod.categ_id.parent_id.name == 'Bahan Laundry')
+            ):
+                dup = self.search([
+                    ('id', '!=', prod.id),
+                    ('default_code', '=', prod.default_code),
+                    '|',
+                    ('categ_id.name', '=', 'Bahan Laundry'),
+                    ('categ_id.parent_id.name', '=', 'Bahan Laundry')
+                ], limit=1)
+                if dup:
+                    raise ValidationError(f"SKU '{prod.default_code}' sudah digunakan oleh bahan laundry lain. SKU bahan harus unik.")
+
 
 
 
@@ -128,6 +145,23 @@ class ProductProduct(models.Model):
                     has_expired = True
                     break
             product.has_expired_batches = has_expired
+
+    @api.constrains('default_code')
+    def _check_material_sku_unique(self):
+        for prod in self:
+            if prod.default_code and prod.categ_id and (
+                prod.categ_id.name == 'Bahan Laundry' or
+                (prod.categ_id.parent_id and prod.categ_id.parent_id.name == 'Bahan Laundry')
+            ):
+                dup = self.search([
+                    ('id', '!=', prod.id),
+                    ('default_code', '=', prod.default_code),
+                    '|',
+                    ('categ_id.name', '=', 'Bahan Laundry'),
+                    ('categ_id.parent_id.name', '=', 'Bahan Laundry')
+                ], limit=1)
+                if dup:
+                    raise ValidationError(f"SKU '{prod.default_code}' sudah digunakan oleh bahan laundry lain. SKU bahan harus unik.")
 
     def set_min_stock(self, min_qty, max_qty=None, location=None):
         """

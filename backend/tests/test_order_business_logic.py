@@ -415,3 +415,4 @@ class TestLaundryOrderBusinessLogic(TransactionCase):
             body = json.loads(res.get_data(as_text=True))
             self.assertTrue(body["success"])
             self.assertIsInstance(body["data"], list)
+
