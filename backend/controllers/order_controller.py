@@ -181,7 +181,15 @@ class OrderApiController(BaseApiController):
 
     def create_order(self, **kwargs):
         """
-        Membuat transaksi pesanan laundry dengan validasi jenis pengerjaan (Reguler atau Same Day Service).
+        Membuat transaksi pesanan laundry dengan validasi lengkap business logic:
+        - Satu atau multi-layanan (kg, pcs, set, karpet m²)
+        - Validasi kuantitas tidak boleh nol atau negatif
+        - Validasi panjang dan lebar karpet harus positif (> 0)
+        - Validasi kecocokan UoM
+        - Snapshot harga katalog Odoo saat transaksi dibuat
+        - Mengabaikan manipulasi harga/total dari client (seluruhnya dihitung ulang di backend)
+        - Opsi kecepatan: Reguler atau Same Day Service
+        - Validasi ketersediaan dan surcharge Same Day
         """
         if request.httprequest.method == 'OPTIONS':
             return self._json_response({'status': 'ok'})
@@ -195,7 +203,8 @@ class OrderApiController(BaseApiController):
                 }, status=401)
 
             try:
-                body = json.loads(request.httprequest.data.decode('utf-8')) if request.httprequest.data else {}
+                raw_data = request.httprequest.data
+                body = json.loads(raw_data.decode('utf-8')) if raw_data else {}
             except Exception:
                 return self._json_response({
                     'success': False,
@@ -209,32 +218,179 @@ class OrderApiController(BaseApiController):
                     'message': 'Pelanggan (partner_id) wajib diisi.',
                 }, status=400)
 
+            try:
+                pid = int(partner_id)
+            except (ValueError, TypeError):
+                return self._json_response({
+                    'success': False,
+                    'message': 'ID pelanggan (partner_id) harus berupa angka yang valid.',
+                }, status=400)
+
+            partner = request.env['res.partner'].with_user(user).browse(pid)
+            if not partner.exists():
+                return self._json_response({
+                    'success': False,
+                    'message': f'Pelanggan dengan ID {pid} tidak ditemukan.',
+                }, status=404)
+
+            # Validasi hak akses portal: pelanggan hanya boleh membuat order untuk dirinya sendiri
+            if user.has_group('base.group_portal') and user.partner_id.id != pid:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Akses ditolak: Anda hanya dapat membuat pesanan untuk akun Anda sendiri.',
+                }, status=403)
+
             speed = body.get('service_speed') or body.get('priority') or 'regular'
-            # Kompatibilitas jika klien mengirim express
             if speed == 'express':
                 speed = 'same_day'
 
+            if speed not in ('regular', 'same_day'):
+                return self._json_response({
+                    'success': False,
+                    'message': f"Pilihan jenis pengerjaan '{speed}' tidak valid. Pilihan yang tersedia: Reguler (regular) atau Same Day Service (same_day).",
+                }, status=400)
+
+            order_model = request.env['laundry.order'].with_user(user)
+            if speed == 'same_day' and not order_model.is_same_day_available():
+                return self._json_response({
+                    'success': False,
+                    'message': 'Layanan Same Day Service sedang tidak tersedia saat ini.',
+                }, status=400)
+
             lines_data = body.get('lines') or body.get('line_ids') or []
-            if not lines_data:
+            if not lines_data or not isinstance(lines_data, list):
                 return self._json_response({
                     'success': False,
                     'message': 'Detail layanan (lines) wajib diisi minimal satu baris.',
                 }, status=400)
 
             order_lines = []
-            for line in lines_data:
+            line_model = request.env['laundry.order.line']
+
+            for idx, line in enumerate(lines_data):
+                if not isinstance(line, dict):
+                    return self._json_response({
+                        'success': False,
+                        'message': f'Format data baris ke-{idx+1} tidak valid.',
+                    }, status=400)
+
                 prod_id = line.get('product_template_id') or line.get('product_id')
-                qty = line.get('quantity') or line.get('qty') or 1.0
+                if not prod_id:
+                    return self._json_response({
+                        'success': False,
+                        'message': f'ID produk layanan (product_id) wajib diisi pada baris ke-{idx+1}.',
+                    }, status=400)
+
+                try:
+                    prod_id = int(prod_id)
+                except (ValueError, TypeError):
+                    return self._json_response({
+                        'success': False,
+                        'message': f'ID produk layanan {prod_id} harus berupa angka yang valid.',
+                    }, status=400)
+
+                tmpl = request.env['product.template'].with_user(user).browse(prod_id)
+                if not tmpl.exists() or tmpl.type != 'service':
+                    return self._json_response({
+                        'success': False,
+                        'message': f"Produk dengan ID {prod_id} tidak ditemukan atau bukan merupakan layanan laundry.",
+                    }, status=404 if not tmpl.exists() else 400)
+
+                pricing_type = line_model._determine_pricing_type(tmpl.uom_id.name)
+
+                # Validasi kuantitas tidak boleh negatif dan tidak boleh nol
+                qty_raw = line.get('quantity') if 'quantity' in line else line.get('qty')
+                if qty_raw is not None:
+                    try:
+                        qty = float(qty_raw)
+                    except (ValueError, TypeError):
+                        return self._json_response({
+                            'success': False,
+                            'message': f'Kuantitas layanan pada baris ke-{idx+1} harus berupa angka yang valid.',
+                        }, status=400)
+                    if qty <= 0:
+                        return self._json_response({
+                            'success': False,
+                            'message': 'Kuantitas atau berat layanan harus berupa angka positif lebih dari 0.',
+                        }, status=400)
+                else:
+                    qty = 1.0
+
+                # Validasi dimensi karpet (m²)
+                length_val = 0.0
+                width_val = 0.0
+                if pricing_type == 'area':
+                    length_raw = line.get('length')
+                    width_raw = line.get('width')
+                    if length_raw is None or width_raw is None:
+                        return self._json_response({
+                            'success': False,
+                            'message': 'Layanan karpet wajib menyertakan ukuran panjang (length) dan lebar (width).',
+                        }, status=400)
+                    try:
+                        length_val = float(length_raw)
+                        width_val = float(width_raw)
+                    except (ValueError, TypeError):
+                        return self._json_response({
+                            'success': False,
+                            'message': 'Panjang dan lebar karpet harus berupa angka yang valid.',
+                        }, status=400)
+
+                    if length_val <= 0:
+                        return self._json_response({
+                            'success': False,
+                            'message': 'Detail karpet wajib memiliki panjang berupa angka positif lebih dari 0 meter.',
+                        }, status=400)
+                    if width_val <= 0:
+                        return self._json_response({
+                            'success': False,
+                            'message': 'Detail karpet wajib memiliki lebar berupa angka positif lebih dari 0 meter.',
+                        }, status=400)
+
+                # Validasi UoM jika ditentukan di request
+                uom_id = None
+                uom_param = line.get('uom_id') or line.get('uom')
+                if uom_param:
+                    if isinstance(uom_param, int) or (isinstance(uom_param, str) and uom_param.isdigit()):
+                        uom_rec = request.env['uom.uom'].with_user(user).browse(int(uom_param))
+                    elif isinstance(uom_param, str):
+                        uom_rec = request.env['uom.uom'].with_user(user).search([('name', '=', uom_param.strip())], limit=1)
+                    else:
+                        uom_rec = None
+
+                    if not uom_rec or not uom_rec.exists():
+                        return self._json_response({
+                            'success': False,
+                            'message': f"Satuan '{uom_param}' tidak ditemukan di sistem.",
+                        }, status=400)
+
+                    # Cek kompatibilitas UoM
+                    if uom_rec.id != tmpl.uom_id.id:
+                        line_root = line_model._get_uom_category_or_root(uom_rec)
+                        prod_root = line_model._get_uom_category_or_root(tmpl.uom_id)
+                        if line_root != prod_root:
+                            return self._json_response({
+                                'success': False,
+                                'message': f"Satuan '{uom_rec.name}' tidak kompatibel dengan produk layanan '{tmpl.name}'.",
+                            }, status=400)
+                    uom_id = uom_rec.id
+                else:
+                    uom_id = tmpl.uom_id.id
+
+                # Snapshot harga satuan langsung dari katalog Odoo (mengabaikan manipulasi harga client)
                 order_lines.append((0, 0, {
-                    'product_template_id': prod_id,
+                    'product_template_id': tmpl.id,
+                    'price_unit': tmpl.list_price,
+                    'uom_id': uom_id,
                     'quantity': qty,
-                    'length': line.get('length', 0.0),
-                    'width': line.get('width', 0.0),
+                    'length': length_val,
+                    'width': width_val,
                     'item_details': line.get('item_details', ''),
+                    'notes': line.get('notes', ''),
                 }))
 
             vals = {
-                'partner_id': int(partner_id),
+                'partner_id': pid,
                 'service_speed': speed,
                 'notes': body.get('notes', ''),
                 'item_details': body.get('item_details', ''),
@@ -243,12 +399,31 @@ class OrderApiController(BaseApiController):
             }
 
             try:
-                order = request.env['laundry.order'].with_user(user).create(vals)
+                order = order_model.create(vals)
             except ValidationError as ve:
                 return self._json_response({
                     'success': False,
                     'message': str(ve),
                 }, status=400)
+
+            # Format rincian lengkap pesanan yang baru dibuat
+            lines_resp = []
+            for ol in order.line_ids:
+                lines_resp.append({
+                    'id': ol.id,
+                    'product_id': ol.product_template_id.id,
+                    'product_name': ol.product_template_id.name,
+                    'pricing_type': ol.pricing_type,
+                    'uom': ol.uom_id.name if ol.uom_id else '',
+                    'quantity': ol.quantity,
+                    'weight': ol.weight,
+                    'length': ol.length,
+                    'width': ol.width,
+                    'area': ol.area,
+                    'price_unit': ol.price_unit,
+                    'subtotal': ol.subtotal,
+                    'item_details': ol.item_details or '',
+                })
 
             return self._json_response({
                 'success': True,
@@ -256,12 +431,16 @@ class OrderApiController(BaseApiController):
                 'data': {
                     'id': order.id,
                     'name': order.name,
+                    'order_date': order.order_date.isoformat() if order.order_date else None,
                     'partner_id': order.partner_id.id,
+                    'partner_name': order.partner_id.name,
                     'service_speed': order.service_speed,
                     'service_speed_fee': order.service_speed_fee,
-                    'total_amount': order.total_amount,
                     'weight': order.weight,
+                    'total_amount': order.total_amount,
                     'state': order.state,
+                    'notes': order.notes or '',
+                    'lines': lines_resp,
                 }
             }, status=201)
 
