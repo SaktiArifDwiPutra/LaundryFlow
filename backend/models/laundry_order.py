@@ -104,8 +104,10 @@ class LaundryOrder(models.Model):
         [
             ("received", "Diterima"),
             ("washing", "Sedang Dicuci"),
+            ("drying", "Sedang Dikeringkan"),
             ("ironing", "Sedang Disetrika"),
-            ("ready", "Siap Diambil"),
+            ("ready", "Siap Diambil / Siap Kirim"),
+            ("out_for_delivery", "Dalam Pengiriman"),
             ("completed", "Selesai"),
             ("cancelled", "Dibatalkan"),
         ],
@@ -113,6 +115,19 @@ class LaundryOrder(models.Model):
         required=True,
         default="received",
         index=True,
+        copy=False,
+        help="Alur status pengerjaan pesanan laundry.",
+    )
+    delivery_type = fields.Selection(
+        [
+            ("pickup", "Ambil Sendiri (Pickup)"),
+            ("delivery", "Antar ke Alamat (Delivery)"),
+        ],
+        string="Metode Pengambilan",
+        required=True,
+        default="pickup",
+        index=True,
+        help="Metode penyerahan cucian kepada pelanggan: Ambil sendiri di tempat (pickup) atau diantar kurir (delivery).",
     )
     invoice_id = fields.Many2one(
         "account.move",
@@ -314,6 +329,11 @@ class LaundryOrder(models.Model):
                 if "service_speed_fee" not in vals:
                     vals["service_speed_fee"] = 0.0
 
+        if "state" in vals:
+            new_state = vals.get("state")
+            for order in self:
+                order._check_state_transition(new_state)
+
         res = super().write(vals)
         if "service_speed" in vals or "service_speed_fee" in vals:
             for order in self:
@@ -329,6 +349,245 @@ class LaundryOrder(models.Model):
             order.line_ids._compute_subtotal()
             order._compute_weight()
             order._compute_total_amount()
+        return True
+
+    # -------------------------------------------------------------------------
+    # Alur Kerja & Transisi Status Pesanan (Order Workflow - Task 1)
+    # -------------------------------------------------------------------------
+    def _get_process_pipeline(self):
+        """
+        Menentukan tahapan proses wajib untuk pesanan ini berdasarkan layanan yang dipesan.
+        Mengembalikan daftar tahapan di antara 'received' dan 'ready'.
+
+        Aturan Bisnis:
+        - Setrika Saja: ['ironing'] (tidak boleh dipaksa washing dan drying)
+        - Cuci Lipat: ['washing', 'drying'] (tidak perlu ironing)
+        - Cuci Setrika / Cuci Standar: ['washing', 'drying', 'ironing']
+        - Karpet / Bantal / Guling: ['washing', 'drying'] (tidak perlu ironing)
+        - Campuran: Menggabungkan seluruh tahapan wajib dari setiap item
+        """
+        self.ensure_one()
+        if self.line_ids:
+            needs_washing = False
+            needs_ironing = False
+
+            for line in self.line_ids:
+                prod_name = (line.product_template_id.name or "").strip().lower()
+
+                # Setrika Saja: hanya setrika (tidak cuci)
+                is_iron_only = ("setrika" in prod_name or "iron" in prod_name) and not any(
+                    w in prod_name for w in ["cuci", "wash", "clean"]
+                )
+
+                # Layanan tanpa setrika: cuci lipat, karpet, bantal, guling
+                is_no_iron = (
+                    "cuci lipat" in prod_name or
+                    "lipat" in prod_name or
+                    "karpet" in prod_name or
+                    "carpet" in prod_name or
+                    "bantal" in prod_name or
+                    "guling" in prod_name
+                )
+
+                if is_iron_only:
+                    needs_ironing = True
+                elif is_no_iron:
+                    needs_washing = True
+                else:
+                    # Cuci setrika, cuci kiloan, cuci satuan, dry cleaning, sprei, bed cover, selimut
+                    needs_washing = True
+                    needs_ironing = True
+
+            stages = []
+            if needs_washing:
+                stages.append("washing")
+                stages.append("drying")  # setiap yang dicuci wajib dikeringkan
+            if needs_ironing:
+                stages.append("ironing")
+            return stages if stages else ["washing", "drying", "ironing"]
+
+        # Kompatibilitas mundur pesanan lama (legacy tanpa line_ids)
+        service_type = self.service_type or "wash_iron"
+        if service_type == "iron":
+            return ["ironing"]
+        elif service_type == "wash_fold":
+            return ["washing", "drying"]
+        else:
+            return ["washing", "drying", "ironing"]
+
+    def _check_state_transition(self, new_state):
+        """
+        Memvalidasi apakah transisi dari self.state ke new_state sah sesuai
+        aturan workflow, jenis layanan, dan metode penyerahan (pickup vs delivery).
+        """
+        self.ensure_one()
+        current_state = self.state
+
+        # Pesanan cancelled tidak boleh diproses kembali tanpa aturan bisnis yang jelas
+        if current_state == "cancelled":
+            raise ValidationError(
+                _("Pesanan '%(name)s' sudah dalam status dibatalkan dan tidak dapat diproses kembali.", name=self.name)
+            )
+
+        # Pesanan completed tidak dapat diubah statusnya
+        if current_state == "completed":
+            raise ValidationError(
+                _("Pesanan '%(name)s' sudah selesai (completed) dan tidak dapat diubah statusnya.", name=self.name)
+            )
+
+        # Jika status sama, tidak ada perubahan
+        if current_state == new_state:
+            return True
+
+        # Pembatalan diizinkan dari status apapun selama belum selesai atau dibatalkan
+        if new_state == "cancelled":
+            return True
+
+        pipeline = self._get_process_pipeline()
+        delivery = self.delivery_type or "pickup"
+
+        if new_state == "washing":
+            if "washing" not in pipeline:
+                raise ValidationError(
+                    _("Layanan pada pesanan '%(name)s' (misal: Setrika Saja) tidak memerlukan tahapan pencucian (washing).",
+                      name=self.name)
+                )
+            if current_state != "received":
+                raise ValidationError(
+                    _("Pesanan '%(name)s' hanya dapat dipindahkan ke status 'Sedang Dicuci' (washing) dari status 'Diterima' (received). Status saat ini: '%(cur)s'.",
+                      name=self.name, cur=current_state)
+                )
+
+        elif new_state == "drying":
+            if "drying" not in pipeline:
+                raise ValidationError(
+                    _("Layanan pada pesanan '%(name)s' tidak memerlukan tahapan pengeringan (drying).", name=self.name)
+                )
+            if current_state != "washing":
+                if current_state == "received":
+                    raise ValidationError(
+                        _("Pesanan '%(name)s' tidak boleh melompati tahapan wajib: harus melalui proses pencucian (washing) terlebih dahulu sebelum dikeringkan.",
+                          name=self.name)
+                    )
+                raise ValidationError(
+                    _("Pesanan '%(name)s' hanya dapat dipindahkan ke status 'Sedang Dikeringkan' (drying) dari status 'Sedang Dicuci' (washing). Status saat ini: '%(cur)s'.",
+                      name=self.name, cur=current_state)
+                )
+
+        elif new_state == "ironing":
+            if "ironing" not in pipeline:
+                raise ValidationError(
+                    _("Layanan pada pesanan '%(name)s' (misal: Cuci Lipat) tidak memerlukan tahapan penyetrikaan (ironing).",
+                      name=self.name)
+                )
+            expected_prev = "drying" if "drying" in pipeline else "received"
+            if current_state != expected_prev:
+                if expected_prev == "drying":
+                    raise ValidationError(
+                        _("Pesanan '%(name)s' tidak boleh melompati tahapan wajib: harus melalui proses pencucian dan pengeringan sebelum disetrika. Status saat ini: '%(cur)s'.",
+                          name=self.name, cur=current_state)
+                    )
+                else:
+                    raise ValidationError(
+                        _("Pesanan Setrika Saja '%(name)s' hanya dapat disetrika langsung dari status 'Diterima' (received). Status saat ini: '%(cur)s'.",
+                          name=self.name, cur=current_state)
+                    )
+
+        elif new_state == "ready":
+            last_stage = pipeline[-1] if pipeline else "received"
+            if current_state != last_stage:
+                stage_labels = {
+                    "washing": "Pencucian (washing)",
+                    "drying": "Pengeringan (drying)",
+                    "ironing": "Penyetrikaan (ironing)",
+                    "received": "Diterima (received)",
+                }
+                expected_label = stage_labels.get(last_stage, last_stage)
+                raise ValidationError(
+                    _("Pesanan '%(name)s' tidak boleh melompati tahapan wajib: harus menyelesaikan tahapan %(stage)s terlebih dahulu sebelum siap diambil/dikirim. Status saat ini: '%(cur)s'.",
+                      name=self.name, stage=expected_label, cur=current_state)
+                )
+
+        elif new_state == "out_for_delivery":
+            if delivery != "delivery":
+                raise ValidationError(
+                    _("Pesanan '%(name)s' menggunakan metode ambil sendiri di tempat (pickup), sehingga tidak melalui proses pengiriman kurir (out_for_delivery).",
+                      name=self.name)
+                )
+            if current_state != "ready":
+                raise ValidationError(
+                    _("Pesanan '%(name)s' harus berstatus 'Siap Diambil / Siap Kirim' (ready) sebelum dapat dikirimkan ke pelanggan. Status saat ini: '%(cur)s'.",
+                      name=self.name, cur=current_state)
+                )
+
+        elif new_state == "completed":
+            if delivery == "delivery":
+                if current_state != "out_for_delivery":
+                    if current_state == "ready":
+                        raise ValidationError(
+                            _("Pesanan antar (delivery) '%(name)s' tidak boleh langsung diselesaikan: harus melewati status 'Dalam Pengiriman' (out_for_delivery) sebelum 'Selesai' (completed).",
+                              name=self.name)
+                        )
+                    raise ValidationError(
+                        _("Pesanan antar (delivery) '%(name)s' hanya dapat diselesaikan setelah melalui proses pengiriman (out_for_delivery). Status saat ini: '%(cur)s'.",
+                          name=self.name, cur=current_state)
+                    )
+            else:
+                if current_state != "ready":
+                    raise ValidationError(
+                        _("Pesanan ambil di tempat (pickup) '%(name)s' harus berstatus 'Siap Diambil' (ready) sebelum dapat diselesaikan. Status saat ini: '%(cur)s'.",
+                          name=self.name, cur=current_state)
+                    )
+
+        return True
+
+    def action_washing(self):
+        """Memindahkan pesanan ke proses pencucian (washing)."""
+        for order in self:
+            order._check_state_transition("washing")
+            order.state = "washing"
+        return True
+
+    def action_drying(self):
+        """Memindahkan pesanan ke proses pengeringan (drying)."""
+        for order in self:
+            order._check_state_transition("drying")
+            order.state = "drying"
+        return True
+
+    def action_ironing(self):
+        """Memindahkan pesanan ke proses penyetrikaan (ironing)."""
+        for order in self:
+            order._check_state_transition("ironing")
+            order.state = "ironing"
+        return True
+
+    def action_ready(self):
+        """Menandai pesanan telah selesai dikerjakan dan siap diambil atau dikirim."""
+        for order in self:
+            order._check_state_transition("ready")
+            order.state = "ready"
+        return True
+
+    def action_out_for_delivery(self):
+        """Memindahkan pesanan layanan delivery ke status dalam pengiriman kurir."""
+        for order in self:
+            order._check_state_transition("out_for_delivery")
+            order.state = "out_for_delivery"
+        return True
+
+    def action_complete(self):
+        """Menyelesaikan transaksi pesanan laundry (pakaian telah diterima pelanggan)."""
+        for order in self:
+            order._check_state_transition("completed")
+            order.state = "completed"
+        return True
+
+    def action_cancel(self):
+        """Membatalkan pesanan laundry."""
+        for order in self:
+            order._check_state_transition("cancelled")
+            order.state = "cancelled"
         return True
 
 

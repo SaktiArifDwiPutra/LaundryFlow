@@ -7,4 +7,5 @@ from . import test_service_speed
 from . import test_material_inventory
 from . import test_inventory_api
 from . import test_order_business_logic
+from . import test_order_workflow
 
