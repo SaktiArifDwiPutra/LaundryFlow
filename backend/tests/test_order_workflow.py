@@ -414,3 +414,4 @@ class TestLaundryOrderWorkflow(TransactionCase):
         # Mencoba bypass langsung ke ready
         with self.assertRaises(ValidationError):
             order.write({"state": "ready"})
+

@@ -3,7 +3,7 @@ import logging
 from odoo import http
 from odoo.http import request
 from odoo.http.session import session_store
-from odoo.exceptions import ValidationError, AccessError
+from odoo.exceptions import ValidationError, AccessError, UserError
 from .base import BaseApiController
 
 _logger = logging.getLogger(__name__)
@@ -522,6 +522,154 @@ class OrderApiController(BaseApiController):
 
         except Exception as e:
             _logger.exception("Error in get_order_detail: %s", str(e))
+            return self._json_response({
+                'success': False,
+                'message': 'Terjadi kesalahan pada server.',
+            }, status=500)
+
+    @http.route(
+        [
+            '/api/laundry/orders/<int:order_id>/status',
+            '/api/orders/<int:order_id>/status',
+        ],
+        type='http',
+        auth='public',
+        methods=['PATCH', 'OPTIONS'],
+        csrf=False,
+    )
+    def update_order_status(self, order_id, **kwargs):
+        """
+        PATCH /api/laundry/orders/<int:order_id>/status
+        Endpoint untuk memperbarui status pesanan memanfaatkan method workflow (Task 2):
+        - washing -> action_washing()
+        - drying -> action_drying()
+        - ironing -> action_ironing()
+        - ready -> action_ready()
+        - out_for_delivery -> action_out_for_delivery()
+        - completed -> action_complete()
+        - cancelled -> action_cancel()
+
+        Ketentuan:
+        - Autentikasi dan otorisasi: hanya admin/operator (internal users), portal dilarang (HTTP 403).
+        - Menolak direct state write: client memanggil method workflow via API ini.
+        - HTTP 404 jika order_id tidak ditemukan.
+        - HTTP 400 jika payload/parameter 'to' tidak valid atau tidak dikenal.
+        - HTTP 409 Conflict jika status tujuan melompati tahapan wajib atau tidak sah.
+        - Mengembalikan response JSON informatif dengan data: id, order_number, previous_status,
+          current_status, next_status, dan stages.
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return self._json_response({'status': 'ok'})
+
+        STATUS_ACTION_MAP = {
+            'washing': 'action_washing',
+            'drying': 'action_drying',
+            'ironing': 'action_ironing',
+            'ready': 'action_ready',
+            'out_for_delivery': 'action_out_for_delivery',
+            'completed': 'action_complete',
+            'cancelled': 'action_cancel',
+        }
+
+        try:
+            # 1. Autentikasi
+            user = self._get_authenticated_user(request, session_store_fn=session_store)
+            if not user:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Autentikasi diperlukan. Akses tidak diizinkan.',
+                }, status=401)
+
+            # 2. Otorisasi (hanya admin / operator internal, portal/customer dilarang)
+            if user.has_group('base.group_portal') or not user.has_group('base.group_user'):
+                return self._json_response({
+                    'success': False,
+                    'message': 'Akses ditolak: Hanya admin atau operator yang berwenang memperbarui status pesanan.',
+                }, status=403)
+
+            # 3. Parse JSON Body
+            try:
+                raw_data = request.httprequest.data
+                body = json.loads(raw_data.decode('utf-8')) if raw_data else {}
+            except Exception:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Format JSON payload tidak valid.',
+                }, status=400)
+
+            target_status = (body.get('to') or body.get('status') or '').strip().lower()
+            if not target_status:
+                return self._json_response({
+                    'success': False,
+                    'message': "Parameter 'to' wajib diisi dengan status tujuan pesanan.",
+                }, status=400)
+
+            if target_status not in STATUS_ACTION_MAP:
+                valid_options = ", ".join(STATUS_ACTION_MAP.keys())
+                return self._json_response({
+                    'success': False,
+                    'message': f"Status tujuan '{target_status}' tidak dikenal. Pilihan yang valid: {valid_options}.",
+                }, status=400)
+
+            # 4. Ambil order dengan row-level lock untuk menghindari race conditions concurrency
+            request.env.cr.execute("SELECT id FROM laundry_order WHERE id = %s FOR UPDATE", [order_id])
+
+            order = request.env['laundry.order'].with_user(user).browse(order_id)
+            if not order.exists():
+                return self._json_response({
+                    'success': False,
+                    'message': f"Pesanan dengan ID {order_id} tidak ditemukan.",
+                }, status=404)
+
+            action_name = STATUS_ACTION_MAP[target_status]
+            action_method = getattr(order, action_name, None)
+            if not action_method:
+                return self._json_response({
+                    'success': False,
+                    'message': f"Method transisi '{action_name}' tidak ditemukan pada model pesanan.",
+                }, status=500)
+
+            previous_status = order.state
+
+            # 5. Eksekusi transisi status melalui workflow method (menangani ValidationError -> HTTP 409)
+            try:
+                action_method()
+            except (ValidationError, UserError) as ve:
+                return self._json_response({
+                    'success': False,
+                    'message': str(ve).replace('\n', ' '),
+                }, status=409)
+
+            # 6. Hitung pipeline tahapan dan status berikutnya (next_status)
+            pipeline = order._get_process_pipeline()
+            delivery = order.delivery_type or "pickup"
+
+            stages = ["received"] + pipeline + ["ready"]
+            if delivery == "delivery":
+                stages.append("out_for_delivery")
+            stages.append("completed")
+
+            next_status = None
+            if order.state in stages:
+                idx = stages.index(order.state)
+                if idx + 1 < len(stages):
+                    next_status = stages[idx + 1]
+
+            return self._json_response({
+                'success': True,
+                'message': 'Status pesanan berhasil diperbarui.',
+                'data': {
+                    'id': order.id,
+                    'order_number': order.name,
+                    'previous_status': previous_status,
+                    'current_status': order.state,
+                    'next_status': next_status,
+                    'stages': stages,
+                }
+            }, status=200)
+
+        except Exception as e:
+            _logger.exception("Error in update_order_status: %s", str(e))
             return self._json_response({
                 'success': False,
                 'message': 'Terjadi kesalahan pada server.',

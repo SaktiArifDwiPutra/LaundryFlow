@@ -53,6 +53,11 @@ class ApiDocsController(http.Controller):
                     "4. **Pilihan Kecepatan Pengerjaan (Reguler & Same Day Service)**:\n"
                     "   - Same Day Service adalah pilihan prioritas pengerjaan pesanan, bukan produk duplikat.\n"
                     "   - Opsi `service_speed` bernilai `regular` (biaya 0) atau `same_day` (biaya tambahan snapshot dari konfigurasi Odoo).\n\n"
+                    "5. **Workflow & Status Pesanan Laundry**:\n"
+                    "   - Endpoint `PATCH /api/laundry/orders/{order_id}/status` memungkinkan operator internal dan admin memperbarui tahapan status pesanan secara bertahap.\n"
+                    "   - Pipeline tahapan status dinamis sesuai jenis layanan (`Cuci Setrika`, `Cuci Lipat`, `Setrika Saja`, `Karpet`) dan metode pengantaran (`pickup` vs `delivery`).\n"
+                    "   - Validasi ketat mencegah pelompatan status (HTTP 409 Conflict).\n"
+                    "   - Pelanggan/portal dilarang mengubah status pesanan (HTTP 403 Forbidden).\n\n"
                     "### Mekanisme Autentikasi\n"
                     "Endpoint yang dilindungi memerlukan autentikasi sesi Odoo yang valid:\n"
                     "- Header `Authorization: Bearer <session_id>`\n"
@@ -848,6 +853,135 @@ class ApiDocsController(http.Controller):
                             "401": {
                                 "description": "Autentikasi diperlukan.",
                                 "content": {"application/json": {"example": {"success": False, "message": "Autentikasi diperlukan. Akses tidak diizinkan."}}}
+                            }
+                        }
+                    }
+                },
+                "/api/laundry/orders/{order_id}/status": {
+                    "patch": {
+                        "tags": ["Orders"],
+                        "summary": "Perbarui Status Pesanan Laundry",
+                        "operationId": "updateOrderStatus",
+                        "description": (
+                            "Memperbarui tahapan status pengerjaan pesanan laundry berdasarkan alur kerja (workflow) dinamis pesanan.\n\n"
+                            "**Aturan Workflow & Hak Akses:**\n"
+                            "- **Hak Akses:** Hanya dapat diakses oleh operator internal atau administrator (`base.group_user`). Akses oleh pelanggan (Portal) ditolak dengan HTTP 403 Forbidden.\n"
+                            "- **Jalur Tahapan Dinamis:** Tahapan proses ditentukan oleh jenis layanan pada pesanan (misal: 'Setrika Saja' langsung received -> ironing -> ready; 'Cuci Lipat' received -> washing -> drying -> ready; 'Cuci Setrika' received -> washing -> drying -> ironing -> ready).\n"
+                            "- **Tipe Penyelesaian:** Pesanan `pickup` selesai langsung dari ready -> completed. Pesanan `delivery` melalui ready -> out_for_delivery -> completed.\n"
+                            "- **Validasi Transisi:** Perubahan status yang melompati tahapan wajib atau tidak sesuai pipeline layanan ditolak dengan HTTP 409 Conflict.\n"
+                            "- **Pembatalan:** Pesanan dapat dibatalkan (`to: \"cancelled\"`) kapan saja selama belum berstatus `completed` atau sudah `cancelled`.\n"
+                            "- **Proteksi Konkurensi:** Menggunakan row-level locking (`FOR UPDATE`) pada basis data Odoo.\n\n"
+                            "**Route Alias:**\n"
+                            "- `PATCH /api/laundry/orders/{order_id}/status`\n"
+                            "- `PATCH /api/orders/{order_id}/status`"
+                        ),
+                        "security": [{"BearerAuth": []}, {"SessionHeaderAuth": []}],
+                        "parameters": [
+                            {"name": "order_id", "in": "path", "required": True, "description": "ID unik transaksi pesanan laundry.", "schema": {"type": "integer"}, "example": 123}
+                        ],
+                        "requestBody": {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": ["to"],
+                                        "properties": {
+                                            "to": {
+                                                "type": "string",
+                                                "enum": ["washing", "drying", "ironing", "ready", "out_for_delivery", "completed", "cancelled"],
+                                                "description": "Status tujuan yang diinginkan.",
+                                                "example": "washing"
+                                            }
+                                        }
+                                    },
+                                    "example": {
+                                        "to": "washing"
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "200": {
+                                "description": "Status pesanan berhasil diperbarui.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": True,
+                                            "message": "Status pesanan berhasil diperbarui.",
+                                            "data": {
+                                                "id": 123,
+                                                "order_number": "LND/2026/0001",
+                                                "previous_status": "received",
+                                                "current_status": "washing",
+                                                "next_status": "drying",
+                                                "stages": [
+                                                    "received",
+                                                    "washing",
+                                                    "drying",
+                                                    "ironing",
+                                                    "ready",
+                                                    "completed"
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "400": {
+                                "description": "Parameter 'to' tidak disediakan atau status target tidak dikenali.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": False,
+                                            "message": "Parameter status tujuan 'to' wajib diisi."
+                                        }
+                                    }
+                                }
+                            },
+                            "401": {
+                                "description": "Autentikasi diperlukan.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": False,
+                                            "message": "Autentikasi diperlukan. Akses tidak diizinkan."
+                                        }
+                                    }
+                                }
+                            },
+                            "403": {
+                                "description": "Akses ditolak. Pelanggan/Portal tidak memiliki izin mengubah status pesanan.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": False,
+                                            "message": "Akses ditolak. Pelanggan tidak memiliki izin untuk mengubah status pesanan."
+                                        }
+                                    }
+                                }
+                            },
+                            "404": {
+                                "description": "Pesanan laundry tidak ditemukan.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": False,
+                                            "message": "Pesanan laundry dengan ID 999999 tidak ditemukan."
+                                        }
+                                    }
+                                }
+                            },
+                            "409": {
+                                "description": "Konflik transisi status (melompati tahapan wajib atau tidak sesuai alur layanan).",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": False,
+                                            "message": "Transisi status tidak valid: pesanan harus melewati tahapan ['received', 'washing', 'drying', 'ironing', 'ready', 'completed']."
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
