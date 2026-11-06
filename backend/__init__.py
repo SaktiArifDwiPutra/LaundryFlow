@@ -38,6 +38,7 @@ try:
 except Exception:
     pass
 
+from . import utils
 from . import models
 from . import controllers
 
