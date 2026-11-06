@@ -200,11 +200,18 @@ class LaundryOrder(models.Model):
                 else:
                     order.whatsapp_status = "not_sent"
 
+    def _get_partner_phone(self, partner=None):
+        """Ambil nomor telepon partner secara aman baik dari mobile maupun phone."""
+        target = partner or self.partner_id
+        if not target:
+            return ""
+        return getattr(target, "mobile", None) or getattr(target, "phone", None) or ""
+
     @api.onchange("partner_id")
     def _onchange_partner_id_set_whatsapp_phone(self):
         for order in self:
             if order.partner_id and not order.whatsapp_phone:
-                raw_phone = order.partner_id.mobile or order.partner_id.phone or ""
+                raw_phone = order._get_partner_phone()
                 if raw_phone:
                     from ..utils.phone_utils import normalize_phone_number
                     order.whatsapp_phone = normalize_phone_number(raw_phone)
@@ -227,7 +234,7 @@ class LaundryOrder(models.Model):
         # Tentukan nomor telepon tujuan
         target_phone = phone or self.whatsapp_phone
         if not target_phone and self.partner_id:
-            target_phone = self.partner_id.mobile or self.partner_id.phone or ""
+            target_phone = self._get_partner_phone()
 
         # Normalisasi dan validasi nomor telepon
         normalized_phone = normalize_phone_number(target_phone)
@@ -473,10 +480,40 @@ class LaundryOrder(models.Model):
             if "total_amount" in vals and ("line_ids" in vals or vals.get("line_ids")):
                 vals.pop("total_amount", None)
 
+            # Auto-populate whatsapp_phone dari partner jika belum diisi
+            if vals.get("partner_id") and not vals.get("whatsapp_phone"):
+                partner = self.env["res.partner"].browse(vals["partner_id"])
+                raw_phone = getattr(partner, "mobile", None) or getattr(partner, "phone", None) or ""
+                if raw_phone:
+                    from ..utils.phone_utils import normalize_phone_number
+                    vals["whatsapp_phone"] = normalize_phone_number(raw_phone)
+
         orders = super().create(vals_list)
         for order in orders:
             order._compute_weight()
             order._compute_total_amount()
+
+        # Otomasi pengiriman WhatsApp saat pesanan baru dibuat (Event 1)
+        auto_send_param = self.env["ir.config_parameter"].sudo()
+        auto_send_enabled = True
+        if hasattr(auto_send_param, "get_bool"):
+            auto_send_enabled = auto_send_param.get_bool("laundry.auto_send_whatsapp_on_create", default=True)
+        elif hasattr(auto_send_param, "get_param"):
+            val = auto_send_param.get_param("laundry.auto_send_whatsapp_on_create", "True")
+            auto_send_enabled = str(val).lower() in ("true", "1", "t", "yes")
+
+        skip_notification = self.env.context.get("skip_whatsapp_notification", False)
+
+        if auto_send_enabled and not skip_notification:
+            import logging
+            _logger = logging.getLogger(__name__)
+            for order in orders:
+                if order.whatsapp_phone or order._get_partner_phone():
+                    try:
+                        order.action_send_whatsapp_notification(template_type="invoice", send_immediate=True)
+                    except Exception as e:
+                        _logger.warning("Gagal mengirimkan notifikasi WhatsApp otomatis saat pembuatan order %s: %s", order.name, e)
+
         return orders
 
     def write(self, vals):
