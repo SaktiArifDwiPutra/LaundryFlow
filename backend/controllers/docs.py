@@ -1096,6 +1096,139 @@ class ApiDocsController(http.Controller):
                         }
                     }
                 },
+                "/api/laundry/orders/{order_id}/invoice": {
+                    "get": {
+                        "tags": ["Invoices & Payments"],
+                        "summary": "Ambil Data Faktur / Nota Transaksi (Invoice)",
+                        "description": (
+                            "Mengembalikan data faktur/nota transaksi lengkap suatu pesanan untuk menggantikan mock repository di Flutter.\n\n"
+                            "**Alias Routing**:\n"
+                            "- `GET /api/laundry/orders/{order_id}/invoice`\n"
+                            "- `GET /api/orders/{order_id}/invoice`\n"
+                            "- `GET /api/invoices/{order_id}`"
+                        ),
+                        "security": [{"BearerAuth": []}, {"SessionHeaderAuth": []}],
+                        "parameters": [
+                            {"name": "order_id", "in": "path", "required": True, "schema": {"type": "integer"}, "description": "ID unik pesanan laundry."}
+                        ],
+                        "responses": {
+                            "200": {
+                                "description": "Faktur pesanan berhasil diambil.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": True,
+                                            "data": {
+                                                "invoice_number": "INV/LDR/2026/00536",
+                                                "order_id": 491,
+                                                "order_number": "LDR/2026/00536",
+                                                "invoice_date": "2026-11-06T10:00:00",
+                                                "customer": {
+                                                    "id": 12,
+                                                    "name": "Budi Santoso",
+                                                    "phone": "628123456789",
+                                                    "address": "Jl. Mawar No. 10"
+                                                },
+                                                "service_speed": "regular",
+                                                "service_speed_fee": 0.0,
+                                                "delivery_type": "delivery",
+                                                "delivery_address": "Jl. Mawar No. 10",
+                                                "delivery_fee": 10000.0,
+                                                "subtotal_services": 35000.0,
+                                                "total_amount": 45000.0,
+                                                "amount_paid": 50000.0,
+                                                "amount_due": 0.0,
+                                                "change_amount": 5000.0,
+                                                "payment_status": "paid",
+                                                "payment_method": "cash",
+                                                "payment_date": "2026-11-06 10:15:00",
+                                                "payment_reference": None,
+                                                "state": "received",
+                                                "lines": [
+                                                    {
+                                                        "id": 12,
+                                                        "product_id": 101,
+                                                        "product_name": "Cuci Setrika",
+                                                        "pricing_type": "weight",
+                                                        "quantity": 3.5,
+                                                        "price_unit": 10000.0,
+                                                        "subtotal": 35000.0
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "401": {"$ref": "#/components/responses/UnauthorizedError"},
+                            "404": {"description": "Pesanan tidak ditemukan."}
+                        }
+                    }
+                },
+                "/api/laundry/orders/{order_id}/payment": {
+                    "post": {
+                        "tags": ["Invoices & Payments"],
+                        "summary": "Catat Pembayaran Pesanan (Cash, QRIS, Transfer)",
+                        "description": (
+                            "Mencatat pembayaran riil dari pelanggan di kasir.\n\n"
+                            "**Alias Routing**:\n"
+                            "- `POST /api/laundry/orders/{order_id}/payment`\n"
+                            "- `POST /api/orders/{order_id}/payment`\n"
+                            "- `POST /api/orders/{order_id}/pay`"
+                        ),
+                        "security": [{"BearerAuth": []}, {"SessionHeaderAuth": []}],
+                        "parameters": [
+                            {"name": "order_id", "in": "path", "required": True, "schema": {"type": "integer"}, "description": "ID pesanan laundry."}
+                        ],
+                        "requestBody": {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": ["payment_method"],
+                                        "properties": {
+                                            "payment_method": {"type": "string", "enum": ["cash", "qris", "transfer"], "example": "cash"},
+                                            "amount_paid": {"type": "number", "example": 50000.0, "description": "Nominal yang dibayar (default lunas)."},
+                                            "reference": {"type": "string", "example": "QRIS-8392019", "description": "Nomor referensi / bukti bayar."},
+                                            "notes": {"type": "string", "example": "Lunas di kasir"}
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "200": {
+                                "description": "Pembayaran berhasil dicatat.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": True,
+                                            "message": "Pembayaran CASH sebesar Rp 50.000 berhasil dicatat.",
+                                            "data": {
+                                                "invoice_number": "INV/LDR/2026/00536",
+                                                "order_id": 491,
+                                                "order_number": "LDR/2026/00536",
+                                                "total_amount": 45000.0,
+                                                "amount_paid": 50000.0,
+                                                "amount_due": 0.0,
+                                                "change_amount": 5000.0,
+                                                "payment_status": "paid",
+                                                "payment_method": "cash",
+                                                "payment_date": "2026-11-06 10:15:00",
+                                                "payment_reference": None
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "400": {"description": "Parameter pembayaran tidak valid."},
+                            "401": {"$ref": "#/components/responses/UnauthorizedError"},
+                            "403": {"$ref": "#/components/responses/ForbiddenError"},
+                            "404": {"description": "Pesanan tidak ditemukan."}
+                        }
+                    }
+                },
                 "/api/laundry/orders/{order_id}/whatsapp-status": {
                     "get": {
                         "tags": ["Orders"],
@@ -1162,6 +1295,139 @@ class ApiDocsController(http.Controller):
                                     }
                                 }
                             }
+                        }
+                    }
+                },
+                "/api/laundry/orders/{order_id}/invoice": {
+                    "get": {
+                        "tags": ["Invoices & Payments"],
+                        "summary": "Ambil Data Faktur / Nota Transaksi (Invoice)",
+                        "description": (
+                            "Mengembalikan data faktur/nota transaksi lengkap suatu pesanan untuk menggantikan mock repository di Flutter.\n\n"
+                            "**Alias Routing**:\n"
+                            "- `GET /api/laundry/orders/{order_id}/invoice`\n"
+                            "- `GET /api/orders/{order_id}/invoice`\n"
+                            "- `GET /api/invoices/{order_id}`"
+                        ),
+                        "security": [{"BearerAuth": []}, {"SessionHeaderAuth": []}],
+                        "parameters": [
+                            {"name": "order_id", "in": "path", "required": True, "schema": {"type": "integer"}, "description": "ID unik pesanan laundry."}
+                        ],
+                        "responses": {
+                            "200": {
+                                "description": "Faktur pesanan berhasil diambil.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": True,
+                                            "data": {
+                                                "invoice_number": "INV/LDR/2026/00536",
+                                                "order_id": 491,
+                                                "order_number": "LDR/2026/00536",
+                                                "invoice_date": "2026-11-06T10:00:00",
+                                                "customer": {
+                                                    "id": 12,
+                                                    "name": "Budi Santoso",
+                                                    "phone": "628123456789",
+                                                    "address": "Jl. Mawar No. 10"
+                                                },
+                                                "service_speed": "regular",
+                                                "service_speed_fee": 0.0,
+                                                "delivery_type": "delivery",
+                                                "delivery_address": "Jl. Mawar No. 10",
+                                                "delivery_fee": 10000.0,
+                                                "subtotal_services": 35000.0,
+                                                "total_amount": 45000.0,
+                                                "amount_paid": 50000.0,
+                                                "amount_due": 0.0,
+                                                "change_amount": 5000.0,
+                                                "payment_status": "paid",
+                                                "payment_method": "cash",
+                                                "payment_date": "2026-11-06 10:15:00",
+                                                "payment_reference": None,
+                                                "state": "received",
+                                                "lines": [
+                                                    {
+                                                        "id": 12,
+                                                        "product_id": 101,
+                                                        "product_name": "Cuci Setrika",
+                                                        "pricing_type": "weight",
+                                                        "quantity": 3.5,
+                                                        "price_unit": 10000.0,
+                                                        "subtotal": 35000.0
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "401": {"$ref": "#/components/responses/UnauthorizedError"},
+                            "404": {"description": "Pesanan tidak ditemukan."}
+                        }
+                    }
+                },
+                "/api/laundry/orders/{order_id}/payment": {
+                    "post": {
+                        "tags": ["Invoices & Payments"],
+                        "summary": "Catat Pembayaran Pesanan (Cash, QRIS, Transfer)",
+                        "description": (
+                            "Mencatat pembayaran riil dari pelanggan di kasir.\n\n"
+                            "**Alias Routing**:\n"
+                            "- `POST /api/laundry/orders/{order_id}/payment`\n"
+                            "- `POST /api/orders/{order_id}/payment`\n"
+                            "- `POST /api/orders/{order_id}/pay`"
+                        ),
+                        "security": [{"BearerAuth": []}, {"SessionHeaderAuth": []}],
+                        "parameters": [
+                            {"name": "order_id", "in": "path", "required": True, "schema": {"type": "integer"}, "description": "ID pesanan laundry."}
+                        ],
+                        "requestBody": {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": ["payment_method"],
+                                        "properties": {
+                                            "payment_method": {"type": "string", "enum": ["cash", "qris", "transfer"], "example": "cash"},
+                                            "amount_paid": {"type": "number", "example": 50000.0, "description": "Nominal yang dibayar (default lunas)."},
+                                            "reference": {"type": "string", "example": "QRIS-8392019", "description": "Nomor referensi / bukti bayar."},
+                                            "notes": {"type": "string", "example": "Lunas di kasir"}
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "200": {
+                                "description": "Pembayaran berhasil dicatat.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": True,
+                                            "message": "Pembayaran CASH sebesar Rp 50.000 berhasil dicatat.",
+                                            "data": {
+                                                "invoice_number": "INV/LDR/2026/00536",
+                                                "order_id": 491,
+                                                "order_number": "LDR/2026/00536",
+                                                "total_amount": 45000.0,
+                                                "amount_paid": 50000.0,
+                                                "amount_due": 0.0,
+                                                "change_amount": 5000.0,
+                                                "payment_status": "paid",
+                                                "payment_method": "cash",
+                                                "payment_date": "2026-11-06 10:15:00",
+                                                "payment_reference": None
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "400": {"description": "Parameter pembayaran tidak valid."},
+                            "401": {"$ref": "#/components/responses/UnauthorizedError"},
+                            "403": {"$ref": "#/components/responses/ForbiddenError"},
+                            "404": {"description": "Pesanan tidak ditemukan."}
                         }
                     }
                 },
@@ -1254,6 +1520,139 @@ class ApiDocsController(http.Controller):
                                     }
                                 }
                             }
+                        }
+                    }
+                },
+                "/api/laundry/orders/{order_id}/invoice": {
+                    "get": {
+                        "tags": ["Invoices & Payments"],
+                        "summary": "Ambil Data Faktur / Nota Transaksi (Invoice)",
+                        "description": (
+                            "Mengembalikan data faktur/nota transaksi lengkap suatu pesanan untuk menggantikan mock repository di Flutter.\n\n"
+                            "**Alias Routing**:\n"
+                            "- `GET /api/laundry/orders/{order_id}/invoice`\n"
+                            "- `GET /api/orders/{order_id}/invoice`\n"
+                            "- `GET /api/invoices/{order_id}`"
+                        ),
+                        "security": [{"BearerAuth": []}, {"SessionHeaderAuth": []}],
+                        "parameters": [
+                            {"name": "order_id", "in": "path", "required": True, "schema": {"type": "integer"}, "description": "ID unik pesanan laundry."}
+                        ],
+                        "responses": {
+                            "200": {
+                                "description": "Faktur pesanan berhasil diambil.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": True,
+                                            "data": {
+                                                "invoice_number": "INV/LDR/2026/00536",
+                                                "order_id": 491,
+                                                "order_number": "LDR/2026/00536",
+                                                "invoice_date": "2026-11-06T10:00:00",
+                                                "customer": {
+                                                    "id": 12,
+                                                    "name": "Budi Santoso",
+                                                    "phone": "628123456789",
+                                                    "address": "Jl. Mawar No. 10"
+                                                },
+                                                "service_speed": "regular",
+                                                "service_speed_fee": 0.0,
+                                                "delivery_type": "delivery",
+                                                "delivery_address": "Jl. Mawar No. 10",
+                                                "delivery_fee": 10000.0,
+                                                "subtotal_services": 35000.0,
+                                                "total_amount": 45000.0,
+                                                "amount_paid": 50000.0,
+                                                "amount_due": 0.0,
+                                                "change_amount": 5000.0,
+                                                "payment_status": "paid",
+                                                "payment_method": "cash",
+                                                "payment_date": "2026-11-06 10:15:00",
+                                                "payment_reference": None,
+                                                "state": "received",
+                                                "lines": [
+                                                    {
+                                                        "id": 12,
+                                                        "product_id": 101,
+                                                        "product_name": "Cuci Setrika",
+                                                        "pricing_type": "weight",
+                                                        "quantity": 3.5,
+                                                        "price_unit": 10000.0,
+                                                        "subtotal": 35000.0
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "401": {"$ref": "#/components/responses/UnauthorizedError"},
+                            "404": {"description": "Pesanan tidak ditemukan."}
+                        }
+                    }
+                },
+                "/api/laundry/orders/{order_id}/payment": {
+                    "post": {
+                        "tags": ["Invoices & Payments"],
+                        "summary": "Catat Pembayaran Pesanan (Cash, QRIS, Transfer)",
+                        "description": (
+                            "Mencatat pembayaran riil dari pelanggan di kasir.\n\n"
+                            "**Alias Routing**:\n"
+                            "- `POST /api/laundry/orders/{order_id}/payment`\n"
+                            "- `POST /api/orders/{order_id}/payment`\n"
+                            "- `POST /api/orders/{order_id}/pay`"
+                        ),
+                        "security": [{"BearerAuth": []}, {"SessionHeaderAuth": []}],
+                        "parameters": [
+                            {"name": "order_id", "in": "path", "required": True, "schema": {"type": "integer"}, "description": "ID pesanan laundry."}
+                        ],
+                        "requestBody": {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": ["payment_method"],
+                                        "properties": {
+                                            "payment_method": {"type": "string", "enum": ["cash", "qris", "transfer"], "example": "cash"},
+                                            "amount_paid": {"type": "number", "example": 50000.0, "description": "Nominal yang dibayar (default lunas)."},
+                                            "reference": {"type": "string", "example": "QRIS-8392019", "description": "Nomor referensi / bukti bayar."},
+                                            "notes": {"type": "string", "example": "Lunas di kasir"}
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "200": {
+                                "description": "Pembayaran berhasil dicatat.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": True,
+                                            "message": "Pembayaran CASH sebesar Rp 50.000 berhasil dicatat.",
+                                            "data": {
+                                                "invoice_number": "INV/LDR/2026/00536",
+                                                "order_id": 491,
+                                                "order_number": "LDR/2026/00536",
+                                                "total_amount": 45000.0,
+                                                "amount_paid": 50000.0,
+                                                "amount_due": 0.0,
+                                                "change_amount": 5000.0,
+                                                "payment_status": "paid",
+                                                "payment_method": "cash",
+                                                "payment_date": "2026-11-06 10:15:00",
+                                                "payment_reference": None
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "400": {"description": "Parameter pembayaran tidak valid."},
+                            "401": {"$ref": "#/components/responses/UnauthorizedError"},
+                            "403": {"$ref": "#/components/responses/ForbiddenError"},
+                            "404": {"description": "Pesanan tidak ditemukan."}
                         }
                     }
                 }

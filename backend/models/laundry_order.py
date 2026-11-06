@@ -147,6 +147,64 @@ class LaundryOrder(models.Model):
     )
 
     # -------------------------------------------------------------------------
+    # Integrasi Pembayaran & Status Invoice (Kasir & Flutter)
+    # -------------------------------------------------------------------------
+    payment_status = fields.Selection(
+        [
+            ("unpaid", "Belum Lunas"),
+            ("partial", "Bayar Sebagian"),
+            ("paid", "Lunas"),
+        ],
+        string="Status Pembayaran",
+        default="unpaid",
+        required=True,
+        index=True,
+        copy=False,
+        help="Status pembayaran pesanan laundry: Belum Lunas, Bayar Sebagian, atau Lunas.",
+    )
+    payment_method = fields.Selection(
+        [
+            ("cash", "Tunai (Cash)"),
+            ("qris", "QRIS"),
+            ("transfer", "Transfer Bank"),
+        ],
+        string="Metode Pembayaran",
+        copy=False,
+        help="Metode pembayaran yang digunakan oleh pelanggan.",
+    )
+    amount_paid = fields.Monetary(
+        string="Jumlah Dibayar",
+        currency_field="currency_id",
+        default=0.0,
+        copy=False,
+        help="Nominal uang yang telah dibayar oleh pelanggan.",
+    )
+    amount_due = fields.Monetary(
+        string="Sisa Tagihan",
+        compute="_compute_payment_due",
+        store=True,
+        currency_field="currency_id",
+        help="Sisa tagihan yang belum dibayar oleh pelanggan.",
+    )
+    change_amount = fields.Monetary(
+        string="Kembalian",
+        currency_field="currency_id",
+        default=0.0,
+        copy=False,
+        help="Nominal kembalian untuk pembayaran tunai.",
+    )
+    payment_date = fields.Datetime(
+        string="Waktu Pembayaran",
+        copy=False,
+        help="Waktu pencatatan pembayaran pesanan.",
+    )
+    payment_reference = fields.Char(
+        string="Referensi Pembayaran",
+        copy=False,
+        help="Nomor referensi bukti transaksi, ID QRIS, atau nomor transfer bank.",
+    )
+
+    # -------------------------------------------------------------------------
     # Integrasi WhatsApp Tracking & Outbox
     # -------------------------------------------------------------------------
     whatsapp_phone = fields.Char(
@@ -467,6 +525,81 @@ class LaundryOrder(models.Model):
             if order.line_ids:
                 weight_lines = order.line_ids.filtered(lambda l: l.pricing_type == "weight")
                 order.weight = sum(weight_lines.mapped("quantity")) if weight_lines else 0.0
+
+    @api.depends("total_amount", "amount_paid")
+    def _compute_payment_due(self):
+        for order in self:
+            total = float(order.total_amount or 0.0)
+            paid = float(order.amount_paid or 0.0)
+            order.amount_due = max(0.0, total - paid)
+
+    def action_record_payment(self, payment_method, amount_paid=None, payment_reference=None, notes=None):
+        """
+        Mencatat pembayaran pesanan laundry secara real-time.
+        Mendukung pembayaran tunai (cash) dengan perhitungan kembalian, QRIS, dan Transfer Bank.
+        """
+        self.ensure_one()
+        valid_methods = ["cash", "qris", "transfer"]
+        method = (payment_method or "").strip().lower()
+        if method not in valid_methods:
+            raise ValidationError(_("Metode pembayaran '%s' tidak valid. Pilihan: cash, qris, transfer.") % payment_method)
+
+        total = float(self.total_amount or 0.0)
+        pay_amount = float(amount_paid) if amount_paid is not None else total
+        if pay_amount <= 0:
+            raise ValidationError(_("Nominal pembayaran harus lebih dari Rp 0."))
+
+        change = 0.0
+        if method == "cash" and pay_amount > total:
+            change = pay_amount - total
+
+        new_status = "paid" if pay_amount >= total else "partial"
+        update_vals = {
+            "payment_method": method,
+            "payment_status": new_status,
+            "amount_paid": pay_amount,
+            "change_amount": change,
+            "payment_date": fields.Datetime.now(),
+        }
+        if payment_reference:
+            update_vals["payment_reference"] = str(payment_reference).strip()
+        if notes:
+            current_notes = (self.notes or "").strip()
+            pay_note = f"[Pembayaran {method.upper()}: Rp {pay_amount:,.0f} - {notes}]"
+            update_vals["notes"] = f"{current_notes}\n{pay_note}".strip() if current_notes else pay_note
+
+        self.write(update_vals)
+        return {
+            "order_id": self.id,
+            "order_number": self.name,
+            "total_amount": self.total_amount,
+            "amount_paid": self.amount_paid,
+            "amount_due": self.amount_due,
+            "change_amount": self.change_amount,
+            "payment_status": self.payment_status,
+            "payment_method": self.payment_method,
+            "payment_date": self.payment_date.strftime("%Y-%m-%d %H:%M:%S") if self.payment_date else None,
+            "payment_reference": self.payment_reference,
+        }
+
+    def action_generate_invoice(self):
+        """
+        Membuat faktur / invoice resmi di modul account.move Odoo jika belum ada.
+        """
+        self.ensure_one()
+        if self.invoice_id:
+            return self.invoice_id
+
+        invoice_vals = {
+            "move_type": "out_invoice",
+            "partner_id": self.partner_id.id,
+            "invoice_date": fields.Date.today(),
+            "ref": f"Laundry Order {self.name}",
+            "invoice_origin": self.name,
+        }
+        invoice = self.env["account.move"].sudo().create(invoice_vals)
+        self.sudo().write({"invoice_id": invoice.id})
+        return invoice
 
     @api.constrains("weight", "price_per_kg")
     def _check_amounts(self):
