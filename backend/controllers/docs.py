@@ -612,7 +612,8 @@ class ApiDocsController(http.Controller):
                         "security": [{"BearerAuth": []}, {"SessionHeaderAuth": []}],
                         "parameters": [
                             {"name": "partner_id", "in": "query", "required": False, "description": "Filter pesanan berdasarkan ID pelanggan.", "schema": {"type": "integer"}},
-                            {"name": "state", "in": "query", "required": False, "description": "Filter status pesanan (received, washing, ironing, ready, completed, cancelled).", "schema": {"type": "string"}},
+                            {"name": "q", "in": "query", "required": False, "description": "Pencarian teks bebas (nomor pesanan, nama pelanggan, atau nomor WhatsApp).", "schema": {"type": "string"}},
+                            {"name": "state", "in": "query", "required": False, "description": "Filter status pesanan (received, washing, drying, ironing, ready, out_for_delivery, completed, cancelled).", "schema": {"type": "string"}},
                             {"name": "service_speed", "in": "query", "required": False, "description": "Filter kecepatan pengerjaan (regular, same_day).", "schema": {"type": "string"}},
                             {"name": "limit", "in": "query", "required": False, "description": "Jumlah maksimal baris data (maks 100).", "schema": {"type": "integer", "default": 50}},
                             {"name": "offset", "in": "query", "required": False, "description": "Offset baris data untuk paging.", "schema": {"type": "integer", "default": 0}}

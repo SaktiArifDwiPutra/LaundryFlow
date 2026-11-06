@@ -401,11 +401,16 @@ class ProductApiController(BaseApiController):
                     'message': 'Autentikasi diperlukan. Akses tidak diizinkan.'
                 }, status=401)
 
-            # 2. Hak Akses (Authorization - write access)
-            if not user.has_group('base.group_user'):
+            # 2. Hak Akses (Authorization - hanya Admin / Manajer yang berwenang mengubah harga produk)
+            is_admin_or_manager = (
+                user.has_group('base.group_system')
+                or user.has_group('sales_team.group_sale_manager')
+                or user.has_group('stock.group_stock_manager')
+            )
+            if not is_admin_or_manager:
                 return self._json_response({
                     'success': False,
-                    'message': 'Akses ditolak: Hanya admin atau staf yang berwenang mengubah harga produk.'
+                    'message': 'Akses ditolak: Hanya admin atau manajer yang berwenang mengubah harga produk.'
                 }, status=403)
 
             try:

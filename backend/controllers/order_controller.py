@@ -19,6 +19,24 @@ class OrderApiController(BaseApiController):
     - Biaya tambahan diambil dari konfigurasi Odoo jika sudah dikonfirmasi
     """
 
+    @classmethod
+    def _compute_order_stages_and_next(cls, order):
+        """Menghitung daftar tahapan workflow (stages) dan status berikutnya (next_status) untuk pesanan tertentu."""
+        if order.state == 'cancelled':
+            return [], None
+        pipeline = order._get_process_pipeline() if hasattr(order, '_get_process_pipeline') else ['washing', 'drying', 'ironing']
+        delivery = getattr(order, 'delivery_type', 'pickup') or "pickup"
+        stages = ["received"] + pipeline + ["ready"]
+        if delivery == "delivery":
+            stages.append("out_for_delivery")
+        stages.append("completed")
+        next_status = None
+        if order.state in stages:
+            idx = stages.index(order.state)
+            if idx + 1 < len(stages):
+                next_status = stages[idx + 1]
+        return stages, next_status
+
     @http.route(
         [
             '/api/laundry/service-speeds',
@@ -121,6 +139,16 @@ class OrderApiController(BaseApiController):
             if speed_param and str(speed_param).strip():
                 domain.append(('service_speed', '=', str(speed_param).strip()))
 
+            # Filter pencarian teks bebas (q: nomor order, nama pelanggan, nomor WhatsApp)
+            q_param = kwargs.get('q') or request.params.get('q')
+            if q_param and str(q_param).strip():
+                q_clean = str(q_param).strip()
+                domain.append('|')
+                domain.append(('name', 'ilike', q_clean))
+                domain.append('|')
+                domain.append(('partner_id.name', 'ilike', q_clean))
+                domain.append(('whatsapp_phone', 'ilike', q_clean))
+
             # Pagination
             limit = 50
             limit_raw = kwargs.get('limit') or request.params.get('limit')
@@ -151,17 +179,24 @@ class OrderApiController(BaseApiController):
 
             data = []
             for order in orders:
+                stages, next_status = self._compute_order_stages_and_next(order)
+                partner_phone = getattr(order.partner_id, 'phone', None) or getattr(order.partner_id, 'mobile', None) or order.whatsapp_phone or ''
                 data.append({
                     'id': order.id,
                     'name': order.name,
                     'order_date': order.order_date.isoformat() if order.order_date else None,
                     'partner_id': order.partner_id.id,
                     'partner_name': order.partner_id.name,
+                    'partner_phone': partner_phone,
+                    'delivery_type': getattr(order, 'delivery_type', 'pickup') or 'pickup',
+                    'delivery_fee': float(getattr(order, 'delivery_fee', 0.0) or 0.0),
                     'service_speed': order.service_speed,
                     'service_speed_fee': float(order.service_speed_fee or 0.0),
                     'weight': float(order.weight or 0.0),
                     'total_amount': float(order.total_amount or 0.0),
                     'state': order.state,
+                    'stages': stages,
+                    'next_status': next_status,
                     'notes': order.notes or '',
                     'whatsapp_status': order.whatsapp_status,
                     'whatsapp_phone': order.whatsapp_phone,
@@ -392,9 +427,25 @@ class OrderApiController(BaseApiController):
                     'notes': line.get('notes', ''),
                 }))
 
+            # 8. Opsi Pengambilan & Pengantaran (Fulfillment: pickup vs delivery)
+            delivery_type_input = str(body.get('delivery_type') or body.get('fulfillment') or 'pickup').strip().lower()
+            if delivery_type_input not in ['pickup', 'delivery']:
+                delivery_type_input = 'pickup'
+
+            delivery_address_input = body.get('delivery_address') or ''
+            delivery_fee_input = 0.0
+            if delivery_type_input == 'delivery':
+                try:
+                    delivery_fee_input = max(0.0, float(body.get('delivery_fee') or 0.0))
+                except (ValueError, TypeError):
+                    delivery_fee_input = 0.0
+
             vals = {
                 'partner_id': pid,
                 'service_speed': speed,
+                'delivery_type': delivery_type_input,
+                'delivery_address': delivery_address_input,
+                'delivery_fee': delivery_fee_input,
                 'notes': body.get('notes', ''),
                 'item_details': body.get('item_details', ''),
                 'user_id': user.id,
@@ -428,6 +479,11 @@ class OrderApiController(BaseApiController):
                     'item_details': ol.item_details or '',
                 })
 
+            stages, next_status = self._compute_order_stages_and_next(order)
+            partner_phone = getattr(order.partner_id, 'phone', None) or getattr(order.partner_id, 'mobile', None) or order.whatsapp_phone or ''
+            partner_address = order.partner_id.contact_address or ''
+            delivery_address = getattr(order, 'delivery_address', None) or partner_address
+
             return self._json_response({
                 'success': True,
                 'message': 'Pesanan berhasil dibuat.',
@@ -437,11 +493,18 @@ class OrderApiController(BaseApiController):
                     'order_date': order.order_date.isoformat() if order.order_date else None,
                     'partner_id': order.partner_id.id,
                     'partner_name': order.partner_id.name,
+                    'partner_phone': partner_phone,
+                    'partner_address': partner_address,
+                    'delivery_type': getattr(order, 'delivery_type', 'pickup') or 'pickup',
+                    'delivery_address': delivery_address,
+                    'delivery_fee': float(getattr(order, 'delivery_fee', 0.0) or 0.0),
                     'service_speed': order.service_speed,
                     'service_speed_fee': order.service_speed_fee,
                     'weight': order.weight,
                     'total_amount': order.total_amount,
                     'state': order.state,
+                    'stages': stages,
+                    'next_status': next_status,
                     'notes': order.notes or '',
                     'lines': lines_resp,
                 }
@@ -505,6 +568,11 @@ class OrderApiController(BaseApiController):
                     'item_details': line.item_details or '',
                 })
 
+            stages, next_status = self._compute_order_stages_and_next(order)
+            partner_phone = getattr(order.partner_id, 'phone', None) or getattr(order.partner_id, 'mobile', None) or order.whatsapp_phone or ''
+            partner_address = order.partner_id.contact_address or ''
+            delivery_address = getattr(order, 'delivery_address', None) or partner_address
+
             return self._json_response({
                 'success': True,
                 'data': {
@@ -513,11 +581,18 @@ class OrderApiController(BaseApiController):
                     'order_date': order.order_date.isoformat() if order.order_date else None,
                     'partner_id': order.partner_id.id,
                     'partner_name': order.partner_id.name,
+                    'partner_phone': partner_phone,
+                    'partner_address': partner_address,
+                    'delivery_type': getattr(order, 'delivery_type', 'pickup') or 'pickup',
+                    'delivery_address': delivery_address,
+                    'delivery_fee': float(getattr(order, 'delivery_fee', 0.0) or 0.0),
                     'service_speed': order.service_speed,
                     'service_speed_fee': order.service_speed_fee,
                     'weight': order.weight,
                     'total_amount': order.total_amount,
                     'state': order.state,
+                    'stages': stages,
+                    'next_status': next_status,
                     'notes': order.notes or '',
                     'whatsapp_status': order.whatsapp_status,
                     'whatsapp_phone': order.whatsapp_phone,

@@ -129,6 +129,16 @@ class LaundryOrder(models.Model):
         index=True,
         help="Metode penyerahan cucian kepada pelanggan: Ambil sendiri di tempat (pickup) atau diantar kurir (delivery).",
     )
+    delivery_address = fields.Text(
+        string="Alamat Pengantaran",
+        help="Alamat pengiriman cucian jika metode pengantaran adalah delivery.",
+    )
+    delivery_fee = fields.Monetary(
+        string="Biaya Ongkir",
+        currency_field="currency_id",
+        default=0.0,
+        help="Biaya ongkos kirim jika layanan diantar ke alamat pelanggan.",
+    )
     invoice_id = fields.Many2one(
         "account.move",
         string="Invoice",
@@ -440,15 +450,16 @@ class LaundryOrder(models.Model):
     # -------------------------------------------------------------------------
     # Perhitungan Total & Berat (Ketentuan 5, 9, 10)
     # -------------------------------------------------------------------------
-    @api.depends("line_ids.subtotal", "service_speed_fee", "weight", "price_per_kg")
+    @api.depends("line_ids.subtotal", "service_speed_fee", "delivery_fee", "weight", "price_per_kg")
     def _compute_total_amount(self):
         for order in self:
             speed_fee = order.service_speed_fee or 0.0
+            deliv_fee = order.delivery_fee or 0.0
             if order.line_ids:
-                order.total_amount = sum(order.line_ids.mapped("subtotal")) + speed_fee
+                order.total_amount = sum(order.line_ids.mapped("subtotal")) + speed_fee + deliv_fee
             else:
                 # Kompatibilitas mundur dengan transaksi legacy tunggal
-                order.total_amount = ((order.weight or 0.0) * (order.price_per_kg or 0.0)) + speed_fee
+                order.total_amount = ((order.weight or 0.0) * (order.price_per_kg or 0.0)) + speed_fee + deliv_fee
 
     @api.depends("line_ids.quantity", "line_ids.pricing_type")
     def _compute_weight(self):
