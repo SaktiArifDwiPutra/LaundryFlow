@@ -209,6 +209,103 @@ class LaundryOrder(models.Model):
                     from ..utils.phone_utils import normalize_phone_number
                     order.whatsapp_phone = normalize_phone_number(raw_phone)
 
+    def action_send_whatsapp_notification(self, template_type="invoice", custom_text=None, phone=None, send_immediate=True):
+        """
+        Kirim notifikasi WhatsApp untuk pesanan laundry ini menggunakan gateway WAPI (infinys.wapi.outbox).
+
+        :param template_type: Pilihan template: 'invoice', 'ready', 'reminder', 'custom'
+        :param custom_text: Isi pesan kustom jika template_type == 'custom'
+        :param phone: Nomor telepon tujuan alternatif (default menggunakan whatsapp_phone / partner_id)
+        :param send_immediate: Jika True, langsung kirim ke WAPI; jika False, biarkan dalam antrean outbox (cron)
+        :return: Dict status hasil pengiriman {'success': bool, 'message': str, 'outbox_id': int, 'is_delivered': bool}
+        """
+        self.ensure_one()
+
+        from ..utils.phone_utils import normalize_phone_number, validate_phone_number
+        from ..utils.wa_templates import get_whatsapp_message
+
+        # Tentukan nomor telepon tujuan
+        target_phone = phone or self.whatsapp_phone
+        if not target_phone and self.partner_id:
+            target_phone = self.partner_id.mobile or self.partner_id.phone or ""
+
+        # Normalisasi dan validasi nomor telepon
+        normalized_phone = normalize_phone_number(target_phone)
+        is_valid, err_msg = validate_phone_number(normalized_phone)
+        if not is_valid:
+            return {
+                "success": False,
+                "message": f"Pengiriman WhatsApp gagal: {err_msg}",
+                "phone": target_phone,
+                "outbox_id": False,
+                "is_delivered": False,
+            }
+
+        # Simpan nomor yang sudah divalidasi ke pesanan jika belum ada
+        if not self.whatsapp_phone:
+            self.whatsapp_phone = normalized_phone
+
+        # Render pesan menggunakan template builder
+        company_name = self.company_id.name if hasattr(self, "company_id") and self.company_id else "LaundryFlow"
+        message_body = get_whatsapp_message(
+            self,
+            template_type=template_type,
+            custom_text=custom_text,
+            company_name=company_name,
+        )
+
+        subject_map = {
+            "invoice": f"Nota Pesanan {self.name}",
+            "created": f"Nota Pesanan {self.name}",
+            "order_created": f"Nota Pesanan {self.name}",
+            "ready": f"Pesanan Siap {self.name}",
+            "order_ready": f"Pesanan Siap {self.name}",
+            "reminder": f"Pengingat Pesanan {self.name}",
+            "custom": f"Pesan Laundry {self.name}",
+        }
+        subject = subject_map.get(template_type, f"Notifikasi Pesanan {self.name}")
+
+        # Buat record outbox di infinys.wapi.outbox
+        Outbox = self.env["infinys.wapi.outbox"].sudo()
+        outbox_vals = {
+            "name": subject,
+            "phone": normalized_phone,
+            "message": f"<p>{message_body.replace(chr(10), '<br/>')}</p>",
+            "is_queued": True,
+        }
+        outbox = Outbox.create(outbox_vals)
+
+        # Hubungkan outbox dengan pesanan ini
+        self.write({"whatsapp_outbox_ids": [(4, outbox.id)]})
+
+        delivered = False
+        send_error = None
+
+        if send_immediate:
+            try:
+                # Kirim langsung via method send_message_immediate
+                outbox.send_message_immediate()
+                delivered = bool(outbox.is_delivered)
+                send_error = outbox.error_msg
+            except Exception as e:
+                send_error = str(e)
+                delivered = False
+
+        if delivered:
+            self.write({
+                "whatsapp_sent": True,
+                "whatsapp_last_sent": fields.Datetime.now(),
+            })
+
+        return {
+            "success": True if (delivered or not send_immediate or not send_error) else False,
+            "message": "Pesan berhasil dikirim" if delivered else (f"Pesan diantrekan: {send_error}" if send_error else "Pesan berhasil masuk antrean"),
+            "outbox_id": outbox.id,
+            "phone": normalized_phone,
+            "is_delivered": delivered,
+            "template_used": template_type,
+        }
+
     # -------------------------------------------------------------------------
     # Konfigurasi Same Day Service (Ketentuan 3, 7, 8)
     # -------------------------------------------------------------------------
