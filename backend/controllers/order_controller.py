@@ -163,6 +163,9 @@ class OrderApiController(BaseApiController):
                     'total_amount': float(order.total_amount or 0.0),
                     'state': order.state,
                     'notes': order.notes or '',
+                    'whatsapp_status': order.whatsapp_status,
+                    'whatsapp_phone': order.whatsapp_phone,
+                    'whatsapp_sent': bool(order.whatsapp_sent),
                     'lines_count': len(order.line_ids),
                 })
 
@@ -516,6 +519,10 @@ class OrderApiController(BaseApiController):
                     'total_amount': order.total_amount,
                     'state': order.state,
                     'notes': order.notes or '',
+                    'whatsapp_status': order.whatsapp_status,
+                    'whatsapp_phone': order.whatsapp_phone,
+                    'whatsapp_sent': bool(order.whatsapp_sent),
+                    'whatsapp_last_sent': order.whatsapp_last_sent.strftime('%Y-%m-%d %H:%M:%S') if order.whatsapp_last_sent else None,
                     'lines': lines_data,
                 }
             }, status=200)
