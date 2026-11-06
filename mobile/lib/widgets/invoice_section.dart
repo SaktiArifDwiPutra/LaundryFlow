@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../config.dart';
 import '../models/invoice.dart';
 import '../repositories/repositories.dart';
 import '../utils/format.dart';
@@ -43,7 +44,12 @@ class _InvoiceSectionState extends State<InvoiceSection> {
             }
             final invoice = snapshot.data;
             if (invoice == null) {
-              return const Text('Invoice belum dibuat.');
+              return Text(
+                useMock
+                    ? 'Invoice belum dibuat.'
+                    : 'Faktur & status pembayaran dikelola melalui modul Akuntansi Odoo.',
+                style: Theme.of(context).textTheme.bodySmall,
+              );
             }
             return Card(
               margin: EdgeInsets.zero,
