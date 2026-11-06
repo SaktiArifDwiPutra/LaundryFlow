@@ -779,3 +779,79 @@ class OrderApiController(BaseApiController):
                 'message': 'Terjadi kesalahan pada server saat mengirim pesan WhatsApp.',
             }, status=500)
 
+    @http.route(
+        [
+            '/api/orders/<int:order_id>/whatsapp-status',
+            '/api/laundry/orders/<int:order_id>/whatsapp-status',
+        ],
+        type='http',
+        auth='public',
+        methods=['GET', 'OPTIONS'],
+        csrf=False,
+    )
+    def get_order_whatsapp_status(self, order_id, **kwargs):
+        """
+        Mendapatkan status pengiriman WhatsApp terakhir dan riwayat pengiriman pesan untuk pesanan terkait.
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return self._json_response({'status': 'ok'})
+
+        try:
+            # 1. Autentikasi Pengguna
+            user = self._get_authenticated_user(request, session_store_fn=session_store)
+            if not user:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Autentikasi diperlukan. Akses tidak diizinkan.',
+                }, status=401)
+
+            # 2. Cari Pesanan
+            order = request.env['laundry.order'].with_user(user).browse(order_id)
+            if not order.exists():
+                return self._json_response({
+                    'success': False,
+                    'message': f"Pesanan dengan ID {order_id} tidak ditemukan.",
+                }, status=404)
+
+            # 3. Format Riwayat Outbox
+            history = []
+            if hasattr(order, 'whatsapp_outbox_ids') and order.whatsapp_outbox_ids:
+                # Urutkan dari yang terbaru (id descending)
+                sorted_outbox = order.whatsapp_outbox_ids.sorted(key=lambda r: r.id, reverse=True)
+                for item in sorted_outbox:
+                    history.append({
+                        'id': item.id,
+                        'name': item.name or '',
+                        'phone': item.phone or '',
+                        'is_delivered': bool(item.is_delivered),
+                        'is_queued': bool(item.is_queued),
+                        'sent_date': item.sent_date.strftime('%Y-%m-%d %H:%M:%S') if item.sent_date else None,
+                        'create_date': item.create_date.strftime('%Y-%m-%d %H:%M:%S') if item.create_date else None,
+                        'error_msg': item.error_msg or None,
+                        'message_preview': (item.message[:120] + '...') if item.message and len(item.message) > 120 else (item.message or ''),
+                    })
+
+            last_sent_str = order.whatsapp_last_sent.strftime('%Y-%m-%d %H:%M:%S') if order.whatsapp_last_sent else None
+
+            return self._json_response({
+                'success': True,
+                'data': {
+                    'order_id': order.id,
+                    'order_number': order.name,
+                    'whatsapp_status': order.whatsapp_status,
+                    'whatsapp_phone': order.whatsapp_phone,
+                    'whatsapp_sent': bool(order.whatsapp_sent),
+                    'whatsapp_last_sent': last_sent_str,
+                    'outbox_count': len(history),
+                    'history': history,
+                }
+            }, status=200)
+
+        except Exception as e:
+            _logger.exception("Error in get_order_whatsapp_status: %s", str(e))
+            return self._json_response({
+                'success': False,
+                'message': 'Terjadi kesalahan pada server saat mengambil status WhatsApp.',
+            }, status=500)
+
+
