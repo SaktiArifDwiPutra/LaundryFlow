@@ -10,4 +10,5 @@ from . import test_order_business_logic
 from . import test_order_workflow
 from . import test_order_status_api
 from . import test_phone_utils
+from . import test_wa_templates
 
