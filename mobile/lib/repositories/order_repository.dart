@@ -4,11 +4,31 @@ import '../models/order_option.dart';
 import '../models/order_status.dart';
 import '../models/service.dart';
 
+/// Satu baris isian saat membuat pesanan. Field yang dipakai mengikuti
+/// `service.pricingType`: berat (kg), jumlah (pcs/set), atau panjang x lebar (m²).
 class OrderLineInput {
-  const OrderLineInput({required this.service, required this.qty});
+  const OrderLineInput({
+    required this.service,
+    this.weight,
+    this.quantity,
+    this.length,
+    this.width,
+    this.itemDetails = '',
+  });
 
   final Service service;
-  final double qty;
+  final double? weight;
+  final double? quantity;
+  final double? length;
+  final double? width;
+  final String itemDetails;
+
+  /// Angka yang dikalikan dengan harga satuan (kg, pcs, atau m²).
+  double get billableQty => switch (service.pricingType) {
+        PricingType.weight => weight ?? 0,
+        PricingType.unit => quantity ?? 0,
+        PricingType.area => (length ?? 0) * (width ?? 0),
+      };
 }
 
 enum OrderSort { createdAt, dueAt }
