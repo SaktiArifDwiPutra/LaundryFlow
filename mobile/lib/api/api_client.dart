@@ -30,9 +30,21 @@ class ApiClient {
   }) =>
       _send('POST', path, body: body);
 
+  Future<Map<String, dynamic>> patch(
+    String path, {
+    Map<String, dynamic>? body,
+  }) =>
+      _send('PATCH', path, body: body);
+
+  Future<Map<String, dynamic>> put(
+    String path, {
+    Map<String, dynamic>? body,
+  }) =>
+      _send('PUT', path, body: body);
+
   Future<Map<String, dynamic>> delete(
-    String path
-    ) => 
+    String path,
+  ) =>
       _send('DELETE', path);
 
   Uri _uri(String path, Map<String, String>? query) {
@@ -69,6 +81,7 @@ class ApiClient {
     final session = sessionId;
     if (session != null) {
       request.headers['Authorization'] = 'Bearer $session';
+      request.headers['X-Session-Id'] = session;
     }
 
     final http.Response response;
