@@ -9,11 +9,16 @@ import 'mock_customer_repository.dart';
 import 'mock_invoice_repository.dart';
 import 'mock_order_repository.dart';
 import 'mock_service_repository.dart';
+import 'mock_whatsapp_repository.dart';
 import 'odoo_auth_repository.dart';
 import 'odoo_customer_repository.dart';
+import 'odoo_invoice_repository.dart';
+import 'odoo_order_repository.dart';
+import 'odoo_service_repository.dart';
+import 'odoo_whatsapp_repository.dart';
 import 'order_repository.dart';
 import 'service_repository.dart';
-import 'odoo_service_repository.dart';
+import 'whatsapp_repository.dart';
 
 final ApiClient apiClient = ApiClient(
   baseUrl: baseUrl,
@@ -25,8 +30,11 @@ final AuthRepository authRepository =
 final CustomerRepository customerRepository =
     useMock ? MockCustomerRepository() : OdooCustomerRepository(apiClient);
  
-final OrderRepository orderRepository = MockOrderRepository();
+final OrderRepository orderRepository =
+    useMock ? MockOrderRepository() : OdooOrderRepository(apiClient);
 final ServiceRepository serviceRepository =
     useMock ? MockServiceRepository() : OdooServiceRepository(apiClient);
 final InvoiceRepository invoiceRepository =
-    MockInvoiceRepository(orderRepository);
+    useMock ? MockInvoiceRepository(orderRepository) : OdooInvoiceRepository();
+final WhatsAppRepository whatsappRepository =
+    useMock ? MockWhatsAppRepository() : OdooWhatsAppRepository(apiClient);
