@@ -19,6 +19,25 @@ try:
 except Exception:
     pass
 
+# Compatibility patch for Odoo 20: get_param and set_param on ir.config_parameter
+try:
+    from odoo.addons.base.models import ir_config_parameter
+
+    if not hasattr(ir_config_parameter.IrConfigParameter, 'get_param'):
+        def _get_param(self, key, default=False):
+            val = self.get_str(key, default=None)
+            if val is None:
+                return default
+            return val
+        ir_config_parameter.IrConfigParameter.get_param = _get_param
+
+    if not hasattr(ir_config_parameter.IrConfigParameter, 'set_param'):
+        def _set_param(self, key, value):
+            return self.set_str(key, str(value) if value is not None else '')
+        ir_config_parameter.IrConfigParameter.set_param = _set_param
+except Exception:
+    pass
+
 from . import models
 from . import controllers
 
