@@ -137,6 +137,79 @@ class LaundryOrder(models.Model):
     )
 
     # -------------------------------------------------------------------------
+    # Integrasi WhatsApp Tracking & Outbox
+    # -------------------------------------------------------------------------
+    whatsapp_phone = fields.Char(
+        string="Nomor WhatsApp",
+        copy=False,
+        help="Nomor WhatsApp pelanggan untuk pengiriman notifikasi (format: 628xxx).",
+    )
+    whatsapp_sent = fields.Boolean(
+        string="WhatsApp Terkirim",
+        default=False,
+        readonly=True,
+        copy=False,
+        help="Menandakan apakah notifikasi WhatsApp telah berhasil dikirim ke pelanggan.",
+    )
+    whatsapp_last_sent = fields.Datetime(
+        string="Waktu Kirim WA Terakhir",
+        readonly=True,
+        copy=False,
+        help="Waktu terakhir pengiriman pesan WhatsApp pada pesanan ini.",
+    )
+    whatsapp_outbox_ids = fields.Many2many(
+        "infinys.wapi.outbox",
+        "laundry_order_wapi_outbox_rel",
+        "order_id",
+        "outbox_id",
+        string="Riwayat Pesan WhatsApp",
+        copy=False,
+        help="Daftar riwayat pesan WhatsApp yang telah dibuat/dikirim untuk pesanan ini.",
+    )
+    whatsapp_status = fields.Selection(
+        [
+            ("not_sent", "Belum Dikirim"),
+            ("pending", "Dalam Antrean"),
+            ("delivered", "Terkirim"),
+            ("failed", "Gagal"),
+        ],
+        string="Status WhatsApp",
+        compute="_compute_whatsapp_status",
+        store=False,
+        help="Status ringkas pengiriman WhatsApp berdasarkan riwayat pesan terakhir.",
+    )
+
+    @api.depends(
+        "whatsapp_outbox_ids",
+        "whatsapp_outbox_ids.is_delivered",
+        "whatsapp_outbox_ids.is_queued",
+        "whatsapp_outbox_ids.error_msg",
+    )
+    def _compute_whatsapp_status(self):
+        for order in self:
+            if not order.whatsapp_outbox_ids:
+                order.whatsapp_status = "not_sent"
+            else:
+                latest = order.whatsapp_outbox_ids.sorted(lambda r: r.id, reverse=True)[:1]
+                if latest.is_delivered:
+                    order.whatsapp_status = "delivered"
+                elif latest.error_msg and not latest.is_delivered:
+                    order.whatsapp_status = "failed"
+                elif latest.is_queued:
+                    order.whatsapp_status = "pending"
+                else:
+                    order.whatsapp_status = "not_sent"
+
+    @api.onchange("partner_id")
+    def _onchange_partner_id_set_whatsapp_phone(self):
+        for order in self:
+            if order.partner_id and not order.whatsapp_phone:
+                raw_phone = order.partner_id.mobile or order.partner_id.phone or ""
+                if raw_phone:
+                    from ..utils.phone_utils import normalize_phone_number
+                    order.whatsapp_phone = normalize_phone_number(raw_phone)
+
+    # -------------------------------------------------------------------------
     # Konfigurasi Same Day Service (Ketentuan 3, 7, 8)
     # -------------------------------------------------------------------------
     @api.model

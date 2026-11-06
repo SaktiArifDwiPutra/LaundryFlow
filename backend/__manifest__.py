@@ -10,6 +10,7 @@
         "account",
         "stock",
         "product_expiry",
+        "infinys_whatsapp_gateway",
     ],
     "data": [
         "security/ir.access.csv",
