@@ -854,4 +854,111 @@ class OrderApiController(BaseApiController):
                 'message': 'Terjadi kesalahan pada server saat mengambil status WhatsApp.',
             }, status=500)
 
+    @http.route(
+        [
+            '/api/orders/<int:order_id>/whatsapp-preview',
+            '/api/laundry/orders/<int:order_id>/whatsapp-preview',
+        ],
+        type='http',
+        auth='public',
+        methods=['GET', 'OPTIONS'],
+        csrf=False,
+    )
+    def preview_order_whatsapp(self, order_id, **kwargs):
+        """
+        Melihat pratinjau (preview) pesan WhatsApp yang telah diformat sebelum dikirim ke pelanggan.
+        Mendukung query parameter:
+        - template: 'invoice' (default), 'ready', 'reminder', 'custom'
+        - custom_message: pesan kustom jika template='custom'
+        - phone: nomor telepon tujuan (opsional override)
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return self._json_response({'status': 'ok'})
+
+        try:
+            # 1. Autentikasi Pengguna
+            user = self._get_authenticated_user(request, session_store_fn=session_store)
+            if not user:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Autentikasi diperlukan. Akses tidak diizinkan.',
+                }, status=401)
+
+            # 2. Ambil Query / Body Parameter
+            template = (kwargs.get('template') or 'invoice').strip().lower()
+            custom_message = kwargs.get('custom_message') or kwargs.get('message') or ''
+            phone_override = kwargs.get('phone')
+
+            if request.httprequest.data:
+                try:
+                    data = json.loads(request.httprequest.data.decode('utf-8'))
+                    if 'template' in data and not kwargs.get('template'):
+                        template = str(data['template']).strip().lower()
+                    if 'custom_message' in data and not custom_message:
+                        custom_message = data['custom_message']
+                    elif 'message' in data and not custom_message:
+                        custom_message = data['message']
+                    if 'phone' in data and not phone_override:
+                        phone_override = data['phone']
+                except Exception:
+                    pass
+
+            # 3. Cari Pesanan
+            order = request.env['laundry.order'].with_user(user).browse(order_id)
+            if not order.exists():
+                return self._json_response({
+                    'success': False,
+                    'message': f"Pesanan dengan ID {order_id} tidak ditemukan.",
+                }, status=404)
+
+            # 4. Validasi Template
+            valid_templates = ['invoice', 'created', 'order_created', 'ready', 'order_ready', 'reminder', 'custom']
+            if template not in valid_templates:
+                return self._json_response({
+                    'success': False,
+                    'message': f"Template '{template}' tidak valid. Pilihan yang tersedia: invoice, ready, reminder, custom.",
+                }, status=400)
+
+            if template == 'custom' and not str(custom_message).strip():
+                return self._json_response({
+                    'success': False,
+                    'message': "Parameter 'custom_message' wajib diisi jika template bernilai 'custom'.",
+                }, status=400)
+
+            # 5. Resolve Target Phone
+            from ..utils.phone_utils import normalize_phone_number
+            raw_phone = phone_override or order.whatsapp_phone
+            if not raw_phone and order.partner_id:
+                raw_phone = getattr(order.partner_id, 'mobile', None) or getattr(order.partner_id, 'phone', None)
+            target_phone = normalize_phone_number(raw_phone) if raw_phone else ''
+
+            # 6. Render Pesan WhatsApp
+            from ..utils.wa_templates import get_whatsapp_message
+            rendered_text = get_whatsapp_message(
+                template_type=template,
+                order=order,
+                custom_text=custom_message,
+            )
+
+            return self._json_response({
+                'success': True,
+                'data': {
+                    'order_id': order.id,
+                    'order_number': order.name,
+                    'customer_name': order.partner_id.name if order.partner_id else '',
+                    'template': template,
+                    'recipient_phone': target_phone,
+                    'message': rendered_text,
+                    'character_count': len(rendered_text),
+                }
+            }, status=200)
+
+        except Exception as e:
+            _logger.exception("Error in preview_order_whatsapp: %s", str(e))
+            return self._json_response({
+                'success': False,
+                'message': 'Terjadi kesalahan pada server saat mempratinjau pesan WhatsApp.',
+            }, status=500)
+
+
 
