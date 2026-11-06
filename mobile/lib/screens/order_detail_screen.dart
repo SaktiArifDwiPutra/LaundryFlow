@@ -10,6 +10,7 @@ import '../widgets/fulfillment_fields.dart';
 import '../widgets/invoice_section.dart';
 import '../widgets/order_badges.dart';
 import '../widgets/status_chip.dart';
+import '../widgets/whatsapp_section.dart';
 
 class _FulfillmentChoice {
   const _FulfillmentChoice(this.fulfillment, this.address, this.fee);
@@ -270,6 +271,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               InvoiceSection(
                 key: ValueKey('${order.id}-${order.status.code}'),
                 orderId: order.id,
+              ),
+              const SizedBox(height: 24),
+              WhatsAppSection(
+                key: ValueKey('wa-${order.id}-${order.status.code}'),
+                order: order,
               ),
               const SizedBox(height: 24),
               if (next != null)
