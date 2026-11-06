@@ -985,6 +985,276 @@ class ApiDocsController(http.Controller):
                             }
                         }
                     }
+                },
+                "/api/laundry/orders/{order_id}/send-whatsapp": {
+                    "post": {
+                        "tags": ["Orders"],
+                        "summary": "Kirim Notifikasi WhatsApp Pesanan (Manual/Resend)",
+                        "description": (
+                            "Mengirim notifikasi WhatsApp terkait pesanan laundry pelanggan.\n\n"
+                            "**Alias Routing**:\n"
+                            "- `POST /api/laundry/orders/{order_id}/send-whatsapp`\n"
+                            "- `POST /api/orders/{order_id}/send-whatsapp`\n\n"
+                            "**Pilihan Template**:\n"
+                            "- `invoice`: Mengirim rincian nota pesanan baru.\n"
+                            "- `ready`: Memberi tahu pakaian sudah selesai dan siap diambil/diantar.\n"
+                            "- `reminder`: Mengingatkan pesanan yang belum diambil/selesai.\n"
+                            "- `custom`: Pesan khusus (wajib mengisi `custom_message`)."
+                        ),
+                        "security": [{"BearerAuth": []}, {"SessionHeaderAuth": []}, {"ApiKeyHeaderAuth": []}],
+                        "parameters": [
+                            {
+                                "name": "order_id",
+                                "in": "path",
+                                "required": True,
+                                "schema": {"type": "integer"},
+                                "description": "ID unik pesanan laundry di Odoo."
+                            }
+                        ],
+                        "requestBody": {
+                            "required": False,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "template": {
+                                                "type": "string",
+                                                "enum": ["invoice", "ready", "reminder", "custom"],
+                                                "default": "invoice",
+                                                "description": "Jenis template pesan WhatsApp yang akan dikirim."
+                                            },
+                                            "custom_message": {
+                                                "type": "string",
+                                                "description": "Teks pesan kustom jika template bernilai 'custom'."
+                                            },
+                                            "phone": {
+                                                "type": "string",
+                                                "description": "Nomor WhatsApp tujuan opsional jika ingin mengubah nomor penerima."
+                                            },
+                                            "send_immediate": {
+                                                "type": "boolean",
+                                                "default": True,
+                                                "description": "Kirim langsung (True) atau masukkan antrean outbox (False)."
+                                            }
+                                        }
+                                    },
+                                    "example": {
+                                        "template": "invoice",
+                                        "send_immediate": True
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "200": {
+                                "description": "Notifikasi WhatsApp berhasil dikirim atau dimasukkan ke antrean gateway.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": True,
+                                            "message": "Notifikasi WhatsApp berhasil diproses.",
+                                            "data": {
+                                                "order_id": 491,
+                                                "order_number": "LDR/2026/00536",
+                                                "recipient_phone": "628123456789",
+                                                "template_used": "invoice",
+                                                "outbox_id": 12,
+                                                "is_delivered": True,
+                                                "whatsapp_status": "delivered",
+                                                "whatsapp_last_sent": "2026-11-06 10:30:00"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "400": {
+                                "description": "Parameter template tidak valid, nomor telepon salah, atau payload salah.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": False,
+                                            "message": "Nomor telepon tujuan tidak valid atau tidak ditemukan."
+                                        }
+                                    }
+                                }
+                            },
+                            "401": {"$ref": "#/components/responses/UnauthorizedError"},
+                            "403": {"$ref": "#/components/responses/ForbiddenError"},
+                            "404": {
+                                "description": "Pesanan tidak ditemukan.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": False,
+                                            "message": "Pesanan dengan ID 491 tidak ditemukan."
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "/api/laundry/orders/{order_id}/whatsapp-status": {
+                    "get": {
+                        "tags": ["Orders"],
+                        "summary": "Cek Status WhatsApp & Riwayat Outbox Pesanan",
+                        "description": (
+                            "Mengembalikan status pengiriman WhatsApp terakhir dan riwayat outbox pesan.\n\n"
+                            "**Alias Routing**:\n"
+                            "- `GET /api/laundry/orders/{order_id}/whatsapp-status`\n"
+                            "- `GET /api/orders/{order_id}/whatsapp-status`"
+                        ),
+                        "security": [{"BearerAuth": []}, {"SessionHeaderAuth": []}, {"ApiKeyHeaderAuth": []}],
+                        "parameters": [
+                            {
+                                "name": "order_id",
+                                "in": "path",
+                                "required": True,
+                                "schema": {"type": "integer"},
+                                "description": "ID unik pesanan laundry."
+                            }
+                        ],
+                        "responses": {
+                            "200": {
+                                "description": "Status pengiriman dan riwayat outbox berhasil diambil.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": True,
+                                            "data": {
+                                                "order_id": 491,
+                                                "order_number": "LDR/2026/00536",
+                                                "whatsapp_status": "delivered",
+                                                "whatsapp_phone": "628123456789",
+                                                "whatsapp_sent": True,
+                                                "whatsapp_last_sent": "2026-11-06 10:30:00",
+                                                "outbox_count": 1,
+                                                "history": [
+                                                    {
+                                                        "id": 12,
+                                                        "name": "Invoice - LDR/2026/00536",
+                                                        "phone": "628123456789",
+                                                        "is_delivered": True,
+                                                        "is_queued": False,
+                                                        "sent_date": "2026-11-06 10:30:00",
+                                                        "create_date": "2026-11-06 10:29:55",
+                                                        "error_msg": None,
+                                                        "message_preview": "*NOTA TRANSAKSI LAUNDRYFLOW*..."
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "401": {"$ref": "#/components/responses/UnauthorizedError"},
+                            "403": {"$ref": "#/components/responses/ForbiddenError"},
+                            "404": {
+                                "description": "Pesanan tidak ditemukan.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": False,
+                                            "message": "Pesanan dengan ID 491 tidak ditemukan."
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "/api/laundry/orders/{order_id}/whatsapp-preview": {
+                    "get": {
+                        "tags": ["Orders"],
+                        "summary": "Pratinjau Pesan WhatsApp Sebelum Dikirim",
+                        "description": (
+                            "Melihat pratinjau teks pesan WhatsApp yang telah dirender menggunakan data aktual pesanan tanpa mengirimnya ke gateway.\n\n"
+                            "**Alias Routing**:\n"
+                            "- `GET /api/laundry/orders/{order_id}/whatsapp-preview`\n"
+                            "- `GET /api/orders/{order_id}/whatsapp-preview`"
+                        ),
+                        "security": [{"BearerAuth": []}, {"SessionHeaderAuth": []}, {"ApiKeyHeaderAuth": []}],
+                        "parameters": [
+                            {
+                                "name": "order_id",
+                                "in": "path",
+                                "required": True,
+                                "schema": {"type": "integer"},
+                                "description": "ID unik pesanan laundry."
+                            },
+                            {
+                                "name": "template",
+                                "in": "query",
+                                "required": False,
+                                "schema": {
+                                    "type": "string",
+                                    "enum": ["invoice", "ready", "reminder", "custom"],
+                                    "default": "invoice"
+                                },
+                                "description": "Jenis template pesan WhatsApp yang ingin dipratinjau."
+                            },
+                            {
+                                "name": "custom_message",
+                                "in": "query",
+                                "required": False,
+                                "schema": {"type": "string"},
+                                "description": "Teks pesan kustom jika template bernilai 'custom'."
+                            },
+                            {
+                                "name": "phone",
+                                "in": "query",
+                                "required": False,
+                                "schema": {"type": "string"},
+                                "description": "Nomor telepon tujuan alternatif untuk override."
+                            }
+                        ],
+                        "responses": {
+                            "200": {
+                                "description": "Pratinjau pesan berhasil dirender.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": True,
+                                            "data": {
+                                                "order_id": 491,
+                                                "order_number": "LDR/2026/00536",
+                                                "customer_name": "Budi Santoso",
+                                                "template": "invoice",
+                                                "recipient_phone": "628123456789",
+                                                "message": "*NOTA TRANSAKSI LAUNDRYFLOW*\n\nHalo *Budi Santoso*...",
+                                                "character_count": 420
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "400": {
+                                "description": "Template tidak valid atau nomor override salah.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": False,
+                                            "message": "Template 'invalid_name' tidak valid."
+                                        }
+                                    }
+                                }
+                            },
+                            "401": {"$ref": "#/components/responses/UnauthorizedError"},
+                            "403": {"$ref": "#/components/responses/ForbiddenError"},
+                            "404": {
+                                "description": "Pesanan tidak ditemukan.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": False,
+                                            "message": "Pesanan dengan ID 491 tidak ditemukan."
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             },
             "components": {
