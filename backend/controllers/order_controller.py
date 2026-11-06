@@ -709,7 +709,14 @@ class OrderApiController(BaseApiController):
                     'message': 'Autentikasi diperlukan. Akses tidak diizinkan.',
                 }, status=401)
 
-            # 2. Parsing Payload JSON
+            # 2. Otorisasi (hanya admin / operator internal, portal/customer dilarang mengirim WA)
+            if user.has_group('base.group_portal') or not user.has_group('base.group_user'):
+                return self._json_response({
+                    'success': False,
+                    'message': 'Akses ditolak: Hanya admin atau operator yang berwenang mengirim notifikasi WhatsApp.',
+                }, status=403)
+
+            # 3. Parsing Payload JSON
             body = {}
             if request.httprequest.data:
                 try:
@@ -779,6 +786,11 @@ class OrderApiController(BaseApiController):
                 }
             }, status=200)
 
+        except AccessError as e:
+            return self._json_response({
+                'success': False,
+                'message': 'Akses ditolak: Anda tidak memiliki izin untuk operasi ini.',
+            }, status=403)
         except Exception as e:
             _logger.exception("Error in send_order_whatsapp: %s", str(e))
             return self._json_response({
@@ -820,7 +832,14 @@ class OrderApiController(BaseApiController):
                     'message': f"Pesanan dengan ID {order_id} tidak ditemukan.",
                 }, status=404)
 
-            # 3. Format Riwayat Outbox
+            # 3. Otorisasi (portal hanya boleh melihat pesanan miliknya sendiri)
+            if user.has_group('base.group_portal') and order.partner_id.id != user.partner_id.id:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Akses ditolak: Anda hanya dapat melihat status WhatsApp untuk pesanan Anda sendiri.',
+                }, status=403)
+
+            # 4. Format Riwayat Outbox
             history = []
             if hasattr(order, 'whatsapp_outbox_ids') and order.whatsapp_outbox_ids:
                 # Urutkan dari yang terbaru (id descending)
@@ -854,6 +873,11 @@ class OrderApiController(BaseApiController):
                 }
             }, status=200)
 
+        except AccessError as e:
+            return self._json_response({
+                'success': False,
+                'message': 'Akses ditolak: Anda tidak memiliki izin untuk operasi ini.',
+            }, status=403)
         except Exception as e:
             _logger.exception("Error in get_order_whatsapp_status: %s", str(e))
             return self._json_response({
@@ -890,6 +914,13 @@ class OrderApiController(BaseApiController):
                     'success': False,
                     'message': 'Autentikasi diperlukan. Akses tidak diizinkan.',
                 }, status=401)
+
+            # 2. Otorisasi (hanya admin / operator internal, portal/customer dilarang melihat pratinjau WA)
+            if user.has_group('base.group_portal') or not user.has_group('base.group_user'):
+                return self._json_response({
+                    'success': False,
+                    'message': 'Akses ditolak: Hanya admin atau operator yang berwenang melihat pratinjau pesan WhatsApp.',
+                }, status=403)
 
             # 2. Ambil Query / Body Parameter
             template = (kwargs.get('template') or 'invoice').strip().lower()
@@ -960,6 +991,11 @@ class OrderApiController(BaseApiController):
                 }
             }, status=200)
 
+        except AccessError as e:
+            return self._json_response({
+                'success': False,
+                'message': 'Akses ditolak: Anda tidak memiliki izin untuk operasi ini.',
+            }, status=403)
         except Exception as e:
             _logger.exception("Error in preview_order_whatsapp: %s", str(e))
             return self._json_response({
