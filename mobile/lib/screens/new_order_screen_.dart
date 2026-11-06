@@ -110,7 +110,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         );
         return;
       }
-      inputs.add(OrderLineInput(service: service, qty: qty));
+      inputs.add(OrderLineInput(service: service, quantity: qty));
     }
 
     if (_fulfillment == Fulfillment.delivery && _address.text.trim().isEmpty) {
