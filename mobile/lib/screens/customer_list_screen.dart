@@ -15,8 +15,14 @@ class CustomerListScreen extends StatefulWidget {
 
 class _CustomerListScreenState extends State<CustomerListScreen> {
   final _search = TextEditingController();
-  Future<List<Customer>>? _future;
+  late Future<List<Customer>> _future;
   bool _deleting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = customerRepository.list();
+  }
 
   @override
   void dispose() {
@@ -27,7 +33,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   void _runSearch() {
     final q = _search.text.trim();
     setState(() {
-      _future = q.isEmpty ? null : customerRepository.list(q: q);
+      _future = customerRepository.list(q: q);
     });
   }
 
@@ -126,69 +132,65 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
             ),
           ),
           Expanded(
-            child: _future == null
-                ? const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Text(
-                        'Ketik nama atau nomor HP pelanggan, lalu tekan tombol cari di keyboard.',
-                        textAlign: TextAlign.center,
-                      ),
+            child: FutureBuilder<List<Customer>>(
+              future: _future,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Center(
+                    child: CircularProgressIndicator(),
+                  );
+                }
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      'Gagal memuat pelanggan: ${snapshot.error}',
                     ),
-                  )
-                : FutureBuilder<List<Customer>>(
-                    future: _future,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState != ConnectionState.done) {
-                        return const Center(
-                          child: CircularProgressIndicator(),
-                        );
-                      }
-                      if (snapshot.hasError) {
-                        return Center(
-                          child: Text(
-                            'Gagal memuat pelanggan: ${snapshot.error}',
-                          ),
-                        );
-                      }
-                      final customers = snapshot.data!;
-                      if (customers.isEmpty) {
-                        return const Center(
-                          child: Text('Pelanggan tidak ditemukan.'),
-                        );
-                      }
-                      return ListView.builder(
-                        padding: const EdgeInsets.only(bottom: 88),
-                        itemCount: customers.length,
-                        itemBuilder: (context, index) {
-                          final c = customers[index];
-                          final subtitle = [
-                            c.phone.isEmpty ? 'Tanpa nomor HP' : c.phone,
-                            if (c.address.isNotEmpty) c.address,
-                          ].join(' • ');
-                          return ListTile(
-                            leading: CircleAvatar(
-                              child: Text(c.name.isEmpty ? '?' : c.name[0]),
-                            ),
-                            title: Text(c.name),
-                            subtitle: Text(subtitle),
-                            trailing: widget.selectMode
-                                ? null
-                                : IconButton(
-                                    icon: const Icon(Icons.delete_outline),
-                                    tooltip: 'Hapus',
-                                    onPressed: _deleting
-                                        ? null
-                                        : () => _deleteCustomer(c),
-                                  ),
-                            onTap: widget.selectMode
-                                ? () => Navigator.of(context).pop(c)
-                                : null,
-                          );
-                        },
+                  );
+                }
+                final customers = snapshot.data!;
+                if (customers.isEmpty) {
+                  return const Center(
+                    child: Text('Pelanggan tidak ditemukan.'),
+                  );
+                }
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    _runSearch();
+                    await _future;
+                  },
+                  child: ListView.builder(
+                    padding: const EdgeInsets.only(bottom: 88),
+                    itemCount: customers.length,
+                    itemBuilder: (context, index) {
+                      final c = customers[index];
+                      final subtitle = [
+                        c.phone.isEmpty ? 'Tanpa nomor HP' : c.phone,
+                        if (c.address.isNotEmpty) c.address,
+                      ].join(' • ');
+                      return ListTile(
+                        leading: CircleAvatar(
+                          child: Text(c.name.isEmpty ? '?' : c.name[0]),
+                        ),
+                        title: Text(c.name),
+                        subtitle: Text(subtitle),
+                        trailing: widget.selectMode
+                            ? null
+                            : IconButton(
+                                icon: const Icon(Icons.delete_outline),
+                                tooltip: 'Hapus',
+                                onPressed: _deleting
+                                    ? null
+                                    : () => _deleteCustomer(c),
+                              ),
+                        onTap: widget.selectMode
+                            ? () => Navigator.of(context).pop(c)
+                            : null,
                       );
                     },
                   ),
+                );
+              },
+            ),
           ),
         ],
       ),

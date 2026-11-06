@@ -6,6 +6,7 @@ class Customer {
     this.email = '',
     this.street = '',
     this.city = '',
+    this.rawAddress,
   });
 
   final int id;
@@ -14,10 +15,17 @@ class Customer {
   final String email;
   final String street;
   final String city;
+  final String? rawAddress;
 
-  String get address => [street, city].where((s) => s.isNotEmpty).join(', ');
+  String get address {
+    if (rawAddress != null && rawAddress!.isNotEmpty) {
+      return rawAddress!;
+    }
+    return [street, city].where((s) => s.isNotEmpty).join(', ');
+  }
 
   factory Customer.fromJson(Map<String, dynamic> json) {
+    final addr = (json['address'] as String?) ?? '';
     return Customer(
       id: json['id'] as int,
       name: (json['name'] as String?) ?? '',
@@ -25,6 +33,7 @@ class Customer {
       email: (json['email'] as String?) ?? '',
       street: (json['street'] as String?) ?? '',
       city: (json['city'] as String?) ?? '',
+      rawAddress: addr.isNotEmpty ? addr : null,
     );
   }
 }
