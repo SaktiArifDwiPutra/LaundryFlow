@@ -1538,7 +1538,7 @@ class ApiDocsController(http.Controller):
         )
 
     @http.route(
-        ["/api/docs", "/api/laundry/docs", "/docs"],
+        ["/api/docs", "/api/laundry/docs", "/docs", "/api/scalar", "/scalar"],
         type="http",
         auth="none",
         methods=["GET"],
