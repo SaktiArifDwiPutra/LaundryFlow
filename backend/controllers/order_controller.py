@@ -752,6 +752,17 @@ class OrderApiController(BaseApiController):
                 }, status=400)
 
             phone = body.get('phone')
+            if phone:
+                from ..utils.phone_utils import normalize_phone_number, is_valid_whatsapp_number
+                norm_phone = normalize_phone_number(phone)
+                if not is_valid_whatsapp_number(norm_phone):
+                    return self._json_response({
+                        'success': False,
+                        'message': f"Nomor telepon tujuan '{phone}' tidak valid untuk WhatsApp. Gunakan format yang benar (misal: 08123456789 atau 628123456789).",
+                        'phone': phone,
+                    }, status=400)
+                phone = norm_phone
+
             send_immediate = body.get('send_immediate', True)
 
             # 5. Eksekusi Pengiriman Notifikasi WhatsApp
@@ -791,6 +802,11 @@ class OrderApiController(BaseApiController):
                 'success': False,
                 'message': 'Akses ditolak: Anda tidak memiliki izin untuk operasi ini.',
             }, status=403)
+        except (UserError, ValidationError) as e:
+            return self._json_response({
+                'success': False,
+                'message': str(e),
+            }, status=400)
         except Exception as e:
             _logger.exception("Error in send_order_whatsapp: %s", str(e))
             return self._json_response({
@@ -878,6 +894,11 @@ class OrderApiController(BaseApiController):
                 'success': False,
                 'message': 'Akses ditolak: Anda tidak memiliki izin untuk operasi ini.',
             }, status=403)
+        except (UserError, ValidationError) as e:
+            return self._json_response({
+                'success': False,
+                'message': str(e),
+            }, status=400)
         except Exception as e:
             _logger.exception("Error in get_order_whatsapp_status: %s", str(e))
             return self._json_response({
@@ -964,11 +985,21 @@ class OrderApiController(BaseApiController):
                 }, status=400)
 
             # 5. Resolve Target Phone
-            from ..utils.phone_utils import normalize_phone_number
-            raw_phone = phone_override or order.whatsapp_phone
-            if not raw_phone and order.partner_id:
-                raw_phone = getattr(order.partner_id, 'mobile', None) or getattr(order.partner_id, 'phone', None)
-            target_phone = normalize_phone_number(raw_phone) if raw_phone else ''
+            from ..utils.phone_utils import normalize_phone_number, is_valid_whatsapp_number
+            target_phone = ''
+            if phone_override:
+                norm_override = normalize_phone_number(phone_override)
+                if not is_valid_whatsapp_number(norm_override):
+                    return self._json_response({
+                        'success': False,
+                        'message': f"Nomor telepon override '{phone_override}' tidak valid.",
+                    }, status=400)
+                target_phone = norm_override
+            else:
+                raw_phone = order.whatsapp_phone
+                if not raw_phone and order.partner_id:
+                    raw_phone = getattr(order.partner_id, 'mobile', None) or getattr(order.partner_id, 'phone', None)
+                target_phone = normalize_phone_number(raw_phone) if raw_phone else ''
 
             # 6. Render Pesan WhatsApp
             from ..utils.wa_templates import get_whatsapp_message
@@ -996,6 +1027,11 @@ class OrderApiController(BaseApiController):
                 'success': False,
                 'message': 'Akses ditolak: Anda tidak memiliki izin untuk operasi ini.',
             }, status=403)
+        except (UserError, ValidationError) as e:
+            return self._json_response({
+                'success': False,
+                'message': str(e),
+            }, status=400)
         except Exception as e:
             _logger.exception("Error in preview_order_whatsapp: %s", str(e))
             return self._json_response({
