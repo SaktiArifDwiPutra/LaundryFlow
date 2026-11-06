@@ -675,3 +675,107 @@ class OrderApiController(BaseApiController):
                 'message': 'Terjadi kesalahan pada server.',
             }, status=500)
 
+    @http.route(
+        [
+            '/api/orders/<int:order_id>/send-whatsapp',
+            '/api/laundry/orders/<int:order_id>/send-whatsapp',
+        ],
+        type='http',
+        auth='public',
+        methods=['POST', 'OPTIONS'],
+        csrf=False,
+    )
+    def send_order_whatsapp(self, order_id, **kwargs):
+        """
+        Mengirim notifikasi WhatsApp untuk pesanan tertentu (manual trigger atau kirim ulang nota/info).
+        Mendukung pilihan template: 'invoice', 'ready', 'reminder', dan 'custom'.
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return self._json_response({'status': 'ok'})
+
+        try:
+            # 1. Autentikasi Pengguna
+            user = self._get_authenticated_user(request, session_store_fn=session_store)
+            if not user:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Autentikasi diperlukan. Akses tidak diizinkan.',
+                }, status=401)
+
+            # 2. Parsing Payload JSON
+            body = {}
+            if request.httprequest.data:
+                try:
+                    body = json.loads(request.httprequest.data.decode('utf-8'))
+                except (ValueError, UnicodeDecodeError):
+                    return self._json_response({
+                        'success': False,
+                        'message': 'Payload request tidak valid. Format JSON diperlukan.',
+                    }, status=400)
+
+            # 3. Cari Pesanan
+            order = request.env['laundry.order'].with_user(user).browse(order_id)
+            if not order.exists():
+                return self._json_response({
+                    'success': False,
+                    'message': f"Pesanan dengan ID {order_id} tidak ditemukan.",
+                }, status=404)
+
+            # 4. Validasi Parameter Template
+            template = (body.get('template') or 'invoice').strip().lower()
+            valid_templates = ['invoice', 'created', 'order_created', 'ready', 'order_ready', 'reminder', 'custom']
+            if template not in valid_templates:
+                return self._json_response({
+                    'success': False,
+                    'message': f"Template '{template}' tidak valid. Pilihan yang tersedia: invoice, ready, reminder, custom.",
+                }, status=400)
+
+            custom_text = body.get('custom_message') or body.get('message') or ''
+            if template == 'custom' and not str(custom_text).strip():
+                return self._json_response({
+                    'success': False,
+                    'message': "Parameter 'custom_message' wajib diisi jika template bernilai 'custom'.",
+                }, status=400)
+
+            phone = body.get('phone')
+            send_immediate = body.get('send_immediate', True)
+
+            # 5. Eksekusi Pengiriman Notifikasi WhatsApp
+            result = order.action_send_whatsapp_notification(
+                template_type=template,
+                custom_text=custom_text,
+                phone=phone,
+                send_immediate=send_immediate,
+            )
+
+            if not result.get('success'):
+                return self._json_response({
+                    'success': False,
+                    'message': result.get('message', 'Pengiriman WhatsApp gagal.'),
+                    'phone': result.get('phone'),
+                }, status=400)
+
+            last_sent_str = order.whatsapp_last_sent.strftime('%Y-%m-%d %H:%M:%S') if order.whatsapp_last_sent else None
+
+            return self._json_response({
+                'success': True,
+                'message': result.get('message', 'Notifikasi WhatsApp berhasil diproses.'),
+                'data': {
+                    'order_id': order.id,
+                    'order_number': order.name,
+                    'recipient_phone': result.get('phone'),
+                    'template_used': result.get('template_used'),
+                    'outbox_id': result.get('outbox_id'),
+                    'is_delivered': result.get('is_delivered'),
+                    'whatsapp_status': order.whatsapp_status,
+                    'whatsapp_last_sent': last_sent_str,
+                }
+            }, status=200)
+
+        except Exception as e:
+            _logger.exception("Error in send_order_whatsapp: %s", str(e))
+            return self._json_response({
+                'success': False,
+                'message': 'Terjadi kesalahan pada server saat mengirim pesan WhatsApp.',
+            }, status=500)
+
