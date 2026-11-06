@@ -103,3 +103,4 @@ def clean_whatsapp_text(text):
     # Collapse 3 or more newlines into 2 newlines
     text = re.sub(r'\n{3,}', '\n\n', text)
     return text.strip()
+
