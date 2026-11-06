@@ -313,6 +313,32 @@ class LaundryOrder(models.Model):
             "template_used": template_type,
         }
 
+    def _auto_notify_order_ready(self):
+        """
+        Otomasi pengiriman notifikasi WhatsApp saat pesanan menjadi 'ready' (Event 2).
+        """
+        auto_send_param = self.env["ir.config_parameter"].sudo()
+        auto_send_enabled = True
+        if hasattr(auto_send_param, "get_bool"):
+            auto_send_enabled = auto_send_param.get_bool("laundry.auto_send_whatsapp_on_ready", default=True)
+        elif hasattr(auto_send_param, "get_param"):
+            val = auto_send_param.get_param("laundry.auto_send_whatsapp_on_ready", "True")
+            auto_send_enabled = str(val).lower() in ("true", "1", "t", "yes")
+
+        skip_notification = self.env.context.get("skip_whatsapp_notification", False)
+        if not auto_send_enabled or skip_notification:
+            return
+
+        import logging
+        _logger = logging.getLogger(__name__)
+
+        for order in self:
+            if order.whatsapp_phone or order._get_partner_phone():
+                try:
+                    order.action_send_whatsapp_notification(template_type="ready", send_immediate=True)
+                except Exception as e:
+                    _logger.warning("Gagal mengirimkan notifikasi WhatsApp otomatis saat order %s ready: %s", order.name, e)
+
     # -------------------------------------------------------------------------
     # Konfigurasi Same Day Service (Ketentuan 3, 7, 8)
     # -------------------------------------------------------------------------
@@ -536,15 +562,22 @@ class LaundryOrder(models.Model):
                 if "service_speed_fee" not in vals:
                     vals["service_speed_fee"] = 0.0
 
+        orders_to_notify_ready = self.env["laundry.order"]
         if "state" in vals:
             new_state = vals.get("state")
             for order in self:
                 order._check_state_transition(new_state)
+            if new_state == "ready":
+                orders_to_notify_ready = self.filtered(lambda o: o.state != "ready")
 
         res = super().write(vals)
         if "service_speed" in vals or "service_speed_fee" in vals:
             for order in self:
                 order._compute_total_amount()
+
+        if orders_to_notify_ready:
+            orders_to_notify_ready._auto_notify_order_ready()
+
         return res
 
     def recompute_prices(self):
@@ -773,7 +806,7 @@ class LaundryOrder(models.Model):
         """Menandai pesanan telah selesai dikerjakan dan siap diambil atau dikirim."""
         for order in self:
             order._check_state_transition("ready")
-            order.state = "ready"
+            order.write({"state": "ready"})
         return True
 
     def action_out_for_delivery(self):
