@@ -168,7 +168,7 @@ class MockOrderRepository implements OrderRepository {
         'name': customer.name,
         'phone': customer.phone,
       },
-      'lines': [for (final l in lines) lineSnapshot(l.service, l.qty)],
+      'lines': [for (final l in lines) lineSnapshot(l.service, l.billableQty)],
       'notes': notes,
       // Tenggat contoh: express 24 jam, reguler 48 jam.
       'due_at': now
