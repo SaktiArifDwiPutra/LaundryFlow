@@ -29,6 +29,7 @@ class OrderLine {
     required this.unit,
     required this.unitPrice,
     required this.subtotal,
+    this.itemDetails = '',
   });
 
   final int serviceId;
@@ -37,15 +38,18 @@ class OrderLine {
   final String unit;
   final int unitPrice;
   final int subtotal;
+  final String itemDetails;
 
   factory OrderLine.fromJson(Map<String, dynamic> json) {
+    final qtyVal = (json['quantity'] ?? json['qty'] ?? json['weight'] ?? 1.0) as num;
     return OrderLine(
-      serviceId: (json['product_id'] ?? json['service_id']) as int,
-      serviceName: (json['product_name'] ?? json['service_name']) as String,
-      qty: (json['qty'] as num).toDouble(),
+      serviceId: ((json['product_id'] ?? json['service_id'] ?? json['product_template_id']) as int?) ?? 0,
+      serviceName: ((json['product_name'] ?? json['service_name'] ?? json['name']) as String?) ?? 'Layanan',
+      qty: qtyVal.toDouble(),
       unit: ((json['uom'] ?? json['unit']) as String?) ?? '',
-      unitPrice: (json['unit_price'] as num).round(),
-      subtotal: (json['subtotal'] as num).round(),
+      unitPrice: ((json['price_unit'] ?? json['unit_price'] ?? 0) as num).round(),
+      subtotal: ((json['subtotal'] ?? 0) as num).round(),
+      itemDetails: (json['item_details'] as String?) ?? '',
     );
   }
 }
@@ -114,40 +118,74 @@ class Order {
   final DateTime updatedAt;
 
   factory Order.fromJson(Map<String, dynamic> json) {
-    final status = OrderStatus.fromCode(json['status'] as String?);
-    final nextCode = json['next_status'] as String?;
+    final status = OrderStatus.fromCode((json['state'] ?? json['status']) as String?);
+    final nextCode = (json['next_status'] ?? json['next_state']) as String?;
+
+    final customerRaw = json['customer'];
+    final customer = customerRaw is Map<String, dynamic>
+        ? OrderCustomer.fromJson(customerRaw)
+        : OrderCustomer(
+            id: (json['partner_id'] as int?) ?? 0,
+            name: (json['partner_name'] as String?) ?? 'Pelanggan',
+            phone: ((json['partner_phone'] ?? json['phone']) as String?) ?? '',
+          );
+
+    final rawStages = json['stages'] as List<dynamic>?;
+    final List<OrderStatus> stages;
+    if (rawStages != null && rawStages.isNotEmpty) {
+      stages = [for (final s in rawStages) OrderStatus.fromCode(s as String?)];
+    } else {
+      stages = const [
+        OrderStatus.received,
+        OrderStatus.washing,
+        OrderStatus.drying,
+        OrderStatus.ironing,
+        OrderStatus.ready,
+        OrderStatus.completed,
+      ];
+    }
+
+    final dateStr = (json['order_date'] ?? json['created_at']) as String?;
+    final createdAt = dateStr != null
+        ? DateTime.tryParse(dateStr)?.toLocal() ?? DateTime.now()
+        : DateTime.now();
+
+    final updateStr = json['updated_at'] as String?;
+    final updatedAt = updateStr != null
+        ? DateTime.tryParse(updateStr)?.toLocal() ?? createdAt
+        : createdAt;
+
+    final dueStr = json['due_at'] as String?;
+    final dueAt = dueStr != null ? DateTime.tryParse(dueStr)?.toLocal() : null;
+
+    final isOverdue = json['is_overdue'] as bool? ??
+        (dueAt != null && DateTime.now().isAfter(dueAt) && status != OrderStatus.completed);
 
     return Order(
       id: json['id'] as int,
-      number: json['number'] as String,
+      number: ((json['name'] ?? json['number']) as String?) ?? 'LF-${json['id']}',
       status: status,
       nextStatus: json.containsKey('next_status')
           ? (nextCode == null ? null : OrderStatus.fromCode(nextCode))
           : status.next,
-      stages: [
-        for (final s in (json['stages'] as List<dynamic>? ?? const []))
-          OrderStatus.fromCode(s as String?),
-      ],
-      priority: OrderPriority.fromCode(json['priority'] as String?),
-      dueAt: json['due_at'] == null
-          ? null
-          : DateTime.parse(json['due_at'] as String).toLocal(),
-      isOverdue: json['is_overdue'] as bool? ?? false,
+      stages: stages,
+      priority: OrderPriority.fromCode((json['service_speed'] ?? json['priority']) as String?),
+      dueAt: dueAt,
+      isOverdue: isOverdue,
       fulfillment: Fulfillment.fromCode(json['fulfillment'] as String?),
       delivery: json['delivery'] == null
           ? null
           : DeliveryInfo.fromJson(json['delivery'] as Map<String, dynamic>),
-      customer:
-          OrderCustomer.fromJson(json['customer'] as Map<String, dynamic>),
+      customer: customer,
       lines: (json['lines'] as List<dynamic>? ?? const [])
           .map((e) => OrderLine.fromJson(e as Map<String, dynamic>))
           .toList(),
-      expressFee: (json['express_fee'] as num?)?.round() ?? 0,
-      total: (json['total'] as num).round(),
+      expressFee: ((json['service_speed_fee'] ?? json['express_fee'] ?? 0) as num).round(),
+      total: ((json['total_amount'] ?? json['total'] ?? 0) as num).round(),
       currency: (json['currency'] as String?) ?? 'IDR',
       notes: (json['notes'] as String?) ?? '',
-      createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
-      updatedAt: DateTime.parse(json['updated_at'] as String).toLocal(),
+      createdAt: createdAt,
+      updatedAt: updatedAt,
     );
   }
 }
