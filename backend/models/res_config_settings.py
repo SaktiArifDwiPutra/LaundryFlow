@@ -10,10 +10,9 @@ class ResConfigSettings(models.TransientModel):
         default=True,
         help="Aktifkan agar pelanggan dapat memilih opsi pengerjaan Same Day Service pada pesanan.",
     )
-    laundry_same_day_surcharge = fields.Monetary(
+    laundry_same_day_surcharge = fields.Float(
         string="Biaya Tambahan Same Day Service",
         config_parameter="laundry.same_day_surcharge",
-        currency_field="currency_id",
         default=0.0,
         help="Biaya tambahan untuk jenis pengerjaan Same Day Service jika sudah dikonfirmasi secara operasional. Default 0.",
     )

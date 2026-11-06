@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from datetime import date, datetime, timedelta
 import json
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from odoo.tests.common import TransactionCase
 from odoo import fields
 from ..controllers.inventory_controller import LaundryInventoryController
@@ -18,11 +18,15 @@ class TestInventoryApi(TransactionCase):
         cls.public_user = cls.env.ref('base.public_user')
         
         # User Pegawai Internal
+        stock_user_group = cls.env.ref('stock.group_stock_user', raise_if_not_found=False)
+        internal_groups = [cls.env.ref('base.group_user').id]
+        if stock_user_group:
+            internal_groups.append(stock_user_group.id)
         cls.internal_user = cls.env['res.users'].create({
             'name': 'Pegawai Laundry',
             'login': 'pegawai_test',
             'email': 'pegawai@laundryflow.test',
-            'groups_id': [(6, 0, [cls.env.ref('base.group_user').id])],
+            'group_ids': [(6, 0, internal_groups)],
         })
 
         # User Pelanggan (Portal)
@@ -32,7 +36,7 @@ class TestInventoryApi(TransactionCase):
             'name': 'Pelanggan Test',
             'login': 'customer_test',
             'email': 'customer@laundryflow.test',
-            'groups_id': [(6, 0, groups)],
+            'group_ids': [(6, 0, groups)],
         })
 
         # User Admin
@@ -40,7 +44,7 @@ class TestInventoryApi(TransactionCase):
             'name': 'Admin Laundry',
             'login': 'admin_test',
             'email': 'admin@laundryflow.test',
-            'groups_id': [(6, 0, [cls.env.ref('base.group_user').id, cls.env.ref('base.group_system').id])],
+            'group_ids': [(6, 0, [cls.env.ref('base.group_user').id, cls.env.ref('base.group_system').id])],
         })
 
         # Ambil produk bahan laundry
@@ -68,7 +72,9 @@ class TestInventoryApi(TransactionCase):
     def test_01_unauthenticated_request_rejected(self):
         """Request tanpa login / unauthenticated harus ditolak dengan HTTP 401."""
         req = self._mock_request(user=None)
-        res = self.controller.get_inventory_list()
+        with patch('odoo.addons.laundryflow_backend.controllers.inventory_controller.default_request', req):
+            res = self.controller.get_inventory_list()
+            self.assertEqual(res.status_code, 401)
         # Controller menggunakan default_request jika req tidak dipass,
         # kita uji logika proteksi _check_inventory_access
         user, err_resp = self.controller._check_inventory_access(req)
