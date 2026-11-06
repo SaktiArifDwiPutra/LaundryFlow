@@ -112,3 +112,57 @@ def build_order_created_message(order, company_name=None):
     lines.append("Terima kasih atas kepercayaan Anda! ✨")
 
     return clean_whatsapp_text("\n".join(lines))
+
+
+def build_order_ready_message(order, company_name=None):
+    """
+    Build a WhatsApp notification message when a Laundry Order is ready for pickup or delivery.
+
+    :param order: laundry.order record or dict representation
+    :param company_name: Store/company name header (default: from order.company_id or 'LaundryFlow')
+    :return: Formatted WhatsApp message string
+    """
+    if not order:
+        return ''
+
+    # Company name
+    if not company_name:
+        company_rec = _get_field(order, 'company_id')
+        company_name = _get_field(company_rec, 'name') if company_rec else 'LaundryFlow'
+
+    # Customer name
+    partner = _get_field(order, 'partner_id')
+    customer_name = (_get_field(partner, 'name') if partner else None) or 'Pelanggan'
+
+    # Order attributes
+    order_number = _get_field(order, 'name') or 'Pesanan'
+    del_type = _get_field(order, 'delivery_type') or 'pickup'
+    total_amount = _get_field(order, 'total_amount') or 0.0
+    total_str = format_currency_idr(total_amount)
+
+    lines = []
+    lines.append(f"✨ *{company_name.upper()} — PESANAN SIAP!* ✨")
+    lines.append("=" * 36)
+    lines.append(f"Kabar gembira untuk *{customer_name}*! 🎉")
+    lines.append(f"Pakaian Anda dengan nomor pesanan *{order_number}* sudah selesai diproses, bersih, harum, dan siap!")
+    lines.append("")
+
+    if del_type == 'pickup':
+        lines.append("🏪 *Status: Siap Diambil di Outlet (Pickup)*")
+        lines.append(f"Silakan datang ke outlet *{company_name}* untuk mengambil cucian Anda.")
+        lines.append(f"• No. Pesanan : *{order_number}*")
+        lines.append(f"• Total Biaya : *{total_str}*")
+        lines.append("")
+        lines.append("Harap tunjukkan nomor pesanan ini kepada staf kami saat pengambilan.")
+    else:  # delivery
+        lines.append("🛵 *Status: Siap Diantar (Delivery)*")
+        lines.append("Cucian Anda telah selesai dipacking rapi dan sedang menunggu jadwal kurir untuk diantar ke alamat Anda.")
+        lines.append(f"• No. Pesanan : *{order_number}*")
+        lines.append(f"• Total Biaya : *{total_str}*")
+        lines.append("")
+        lines.append("Pastikan nomor ini aktif agar kurir kami dapat menghubungi saat tiba di lokasi.")
+
+    lines.append("")
+    lines.append("Terima kasih telah mempercayakan pakaian Anda kepada kami! Semoga hari Anda menyenangkan. 😊✨")
+
+    return clean_whatsapp_text("\n".join(lines))
