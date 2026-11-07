@@ -187,3 +187,4 @@ class OdooOrderRepository implements OrderRepository {
     return OrderSummary(byStatus: byStatus, overdue: overdue, express: express);
   }
 }
+

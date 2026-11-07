@@ -11,3 +11,4 @@ class OdooInvoiceRepository implements InvoiceRepository {
     return null;
   }
 }
+

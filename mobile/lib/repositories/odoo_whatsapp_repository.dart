@@ -58,3 +58,4 @@ class OdooWhatsAppRepository implements WhatsAppRepository {
     return WhatsAppStatus.fromJson(data);
   }
 }
+

@@ -78,3 +78,4 @@ class MockWhatsAppRepository implements WhatsAppRepository {
         );
   }
 }
+

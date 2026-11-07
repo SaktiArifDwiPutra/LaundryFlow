@@ -18,3 +18,4 @@ abstract class WhatsAppRepository {
 
   Future<WhatsAppStatus> status(int orderId);
 }
+
