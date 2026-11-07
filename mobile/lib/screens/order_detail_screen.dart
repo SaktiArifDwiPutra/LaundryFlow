@@ -130,41 +130,45 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Detail Pesanan')),
-      body: FutureBuilder<Order>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Text('Gagal memuat pesanan: ${snapshot.error}'),
-            );
-          }
+      body: SafeArea(
+        child: FutureBuilder<Order>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Center(
+                child: Text('Gagal memuat pesanan: ${snapshot.error}'),
+              );
+            }
 
-          final order = snapshot.data!;
-          final next = order.nextStatus;
-          final due = order.dueAt;
-          final servicesTotal =
-              order.lines.fold<int>(0, (sum, l) => sum + l.subtotal);
-          final delivery = order.delivery;
-          final deliveryFee = delivery?.fee ?? 0;
-          final canEditFulfillment = _editableStatuses.contains(order.status);
+            final order = snapshot.data!;
+            final next = order.nextStatus;
+            final due = order.dueAt;
+            final servicesTotal =
+                order.lines.fold<int>(0, (sum, l) => sum + l.subtotal);
+            final delivery = order.delivery;
+            final deliveryFee = delivery?.fee ?? 0;
+            final canEditFulfillment = _editableStatuses.contains(order.status);
 
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(order.number, style: textTheme.titleLarge),
-                  ),
-                  StatusChip(status: order.status),
-                ],
-              ),
+            return ListView(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 32 + bottomInset),
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(order.number, style: textTheme.titleLarge),
+                    ),
+                    _OrderPaymentBadge(order: order),
+                    const SizedBox(width: 8),
+                    StatusChip(status: order.status),
+                  ],
+                ),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -271,6 +275,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               InvoiceSection(
                 key: ValueKey('${order.id}-${order.status.code}'),
                 orderId: order.id,
+                onPaymentSuccess: () {
+                  setState(() {
+                    _future = orderRepository.get(widget.orderId);
+                  });
+                },
               ),
               const SizedBox(height: 24),
               WhatsAppSection(
@@ -279,10 +288,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               ),
               const SizedBox(height: 24),
               if (next != null)
-                FilledButton(
-                  onPressed: _saving ? null : () => _advance(order),
-                  child: Text(
-                    _saving ? 'Menyimpan...' : 'Lanjut: ${next.label}',
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: FilledButton(
+                    onPressed: _saving ? null : () => _advance(order),
+                    child: Text(
+                      _saving ? 'Menyimpan...' : 'Lanjut: ${next.label}',
+                    ),
                   ),
                 )
               else
@@ -291,9 +304,38 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       ? 'Pesanan sudah selesai.'
                       : 'Status tidak dikenal, tidak bisa diubah dari aplikasi.',
                 ),
+              SizedBox(height: 16 + bottomInset),
             ],
           );
         },
+      ),
+    ));
+  }
+}
+
+class _OrderPaymentBadge extends StatelessWidget {
+  const _OrderPaymentBadge({required this.order});
+
+  final Order order;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = order.isPaid
+        ? Colors.green
+        : (order.isPartial ? Colors.orange : Colors.red);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        order.paymentLabel,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
