@@ -52,12 +52,14 @@ class Service {
 
   /// Bentuk item `data` pada GET /api/laundry/products.
   factory Service.fromJson(Map<String, dynamic> json) {
-    final unit = ((json['uom'] ?? json['unit']) as String?) ?? '';
+    final unit = ((json['uom'] ?? json['unit'] ?? json['uom_name']) as String?) ?? '';
+    final rawPrice = json['unit_price'] ?? json['list_price'] ?? json['price'] ?? 0;
+    final priceNum = rawPrice is num ? rawPrice : (num.tryParse(rawPrice.toString()) ?? 0);
     return Service(
       id: json['id'] as int,
       name: json['name'] as String,
       unit: unit,
-      unitPrice: (json['unit_price'] as num).round(),
+      unitPrice: priceNum.round(),
       pricingType: PricingType.resolve(json['pricing_type'] as String?, unit),
       sku: (json['sku'] as String?) ?? '',
       category: (json['category'] as String?) ?? '',
