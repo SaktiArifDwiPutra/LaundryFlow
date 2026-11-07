@@ -1,5 +1,6 @@
 import '../models/invoice.dart';
 import 'invoice_repository.dart';
+import 'mock_order_repository.dart';
 import 'order_repository.dart';
 
 class MockInvoiceRepository implements InvoiceRepository {
@@ -61,6 +62,17 @@ class MockInvoiceRepository implements InvoiceRepository {
       paymentDate: DateTime.now().toLocal().toString().substring(0, 19),
     );
     _cache[orderId] = updated;
+
+    if (_orders is MockOrderRepository) {
+      _orders.recordPayment(
+        orderId,
+        paymentStatus: status,
+        paymentMethod: paymentMethod,
+        amountPaid: paid,
+        amountDue: due,
+      );
+    }
+
     return updated;
   }
 }

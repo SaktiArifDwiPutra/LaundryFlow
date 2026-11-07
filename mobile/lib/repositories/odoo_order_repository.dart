@@ -5,12 +5,15 @@ import '../models/order.dart';
 import '../models/order_option.dart';
 import '../models/order_status.dart';
 import '../models/service.dart';
+import 'invoice_repository.dart';
+import 'odoo_invoice_repository.dart';
 import 'order_repository.dart';
 
 class OdooOrderRepository implements OrderRepository {
-  OdooOrderRepository(this._api);
+  OdooOrderRepository(this._api, {this.invoiceRepository});
 
   final ApiClient _api;
+  final InvoiceRepository? invoiceRepository;
 
   @override
   Future<List<Order>> list({
@@ -48,6 +51,22 @@ class OdooOrderRepository implements OrderRepository {
           .toList();
     }
 
+    if (invoiceRepository is OdooInvoiceRepository) {
+      final odooInv = invoiceRepository as OdooInvoiceRepository;
+      orders = orders.map((o) {
+        final cached = odooInv.getCached(o.id);
+        if (cached != null) {
+          return o.copyWith(
+            paymentStatus: cached.paymentState,
+            paymentMethod: cached.paymentMethod,
+            amountPaid: cached.amountPaid,
+            amountDue: cached.amountDue,
+          );
+        }
+        return o;
+      }).toList();
+    }
+
     orders.sort((a, b) {
       if (sort == OrderSort.dueAt) {
         if (a.dueAt == null && b.dueAt == null) return 0;
@@ -68,7 +87,19 @@ class OdooOrderRepository implements OrderRepository {
     if (data is! Map<String, dynamic>) {
       throw const ApiException('Data pesanan tidak valid.');
     }
-    return Order.fromJson(data);
+    var order = Order.fromJson(data);
+    if (invoiceRepository is OdooInvoiceRepository) {
+      final cached = (invoiceRepository as OdooInvoiceRepository).getCached(id);
+      if (cached != null) {
+        order = order.copyWith(
+          paymentStatus: cached.paymentState,
+          paymentMethod: cached.paymentMethod,
+          amountPaid: cached.amountPaid,
+          amountDue: cached.amountDue,
+        );
+      }
+    }
+    return order;
   }
 
   @override

@@ -135,6 +135,56 @@ class Order {
         _ => 'Belum Lunas',
       };
 
+  Order copyWith({
+    int? id,
+    String? number,
+    OrderStatus? status,
+    OrderStatus? nextStatus,
+    List<OrderStatus>? stages,
+    OrderPriority? priority,
+    DateTime? dueAt,
+    bool? isOverdue,
+    Fulfillment? fulfillment,
+    DeliveryInfo? delivery,
+    OrderCustomer? customer,
+    List<OrderLine>? lines,
+    int? expressFee,
+    int? total,
+    String? currency,
+    String? notes,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    String? paymentStatus,
+    String? paymentMethod,
+    int? amountPaid,
+    int? amountDue,
+  }) {
+    return Order(
+      id: id ?? this.id,
+      number: number ?? this.number,
+      status: status ?? this.status,
+      nextStatus: nextStatus ?? this.nextStatus,
+      stages: stages ?? this.stages,
+      priority: priority ?? this.priority,
+      dueAt: dueAt ?? this.dueAt,
+      isOverdue: isOverdue ?? this.isOverdue,
+      fulfillment: fulfillment ?? this.fulfillment,
+      delivery: delivery ?? this.delivery,
+      customer: customer ?? this.customer,
+      lines: lines ?? this.lines,
+      expressFee: expressFee ?? this.expressFee,
+      total: total ?? this.total,
+      currency: currency ?? this.currency,
+      notes: notes ?? this.notes,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      paymentStatus: paymentStatus ?? this.paymentStatus,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      amountPaid: amountPaid ?? this.amountPaid,
+      amountDue: amountDue ?? this.amountDue,
+    );
+  }
+
   factory Order.fromJson(Map<String, dynamic> json) {
     final status = OrderStatus.fromCode((json['state'] ?? json['status']) as String?);
     final nextCode = (json['next_status'] ?? json['next_state']) as String?;

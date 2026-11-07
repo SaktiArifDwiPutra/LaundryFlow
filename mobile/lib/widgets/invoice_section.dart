@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/invoice.dart';
+import '../models/order.dart';
 import '../repositories/repositories.dart';
 import '../theme/app_colors.dart';
 import '../utils/format.dart';
@@ -9,10 +10,12 @@ class InvoiceSection extends StatefulWidget {
   const InvoiceSection({
     super.key,
     required this.orderId,
+    this.order,
     this.onPaymentSuccess,
   });
 
   final int orderId;
+  final Order? order;
   final VoidCallback? onPaymentSuccess;
 
   @override
@@ -273,12 +276,13 @@ class _InvoiceSectionState extends State<InvoiceSection> {
     setState(() => _processing = true);
     try {
       final nominal = int.tryParse(
-        amountController.text.replaceAll(RegExp(r'\D'), ''),
-      );
+            amountController.text.replaceAll(RegExp(r'\D'), ''),
+          ) ??
+          targetAmount;
       await invoiceRepository.recordPayment(
         orderId: widget.orderId,
         paymentMethod: method,
-        amountPaid: nominal,
+        amountPaid: nominal > 0 ? nominal : targetAmount,
         reference: refController.text.trim().isNotEmpty
             ? refController.text.trim()
             : null,
@@ -288,7 +292,7 @@ class _InvoiceSectionState extends State<InvoiceSection> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pembayaran berhasil dicatat ke sistem Odoo.')),
+        const SnackBar(content: Text('Pembayaran berhasil dicatat ke sistem.')),
       );
       _reload();
       widget.onPaymentSuccess?.call();
@@ -323,16 +327,39 @@ class _InvoiceSectionState extends State<InvoiceSection> {
         FutureBuilder<Invoice?>(
           future: _future,
           builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
+            if (snapshot.connectionState != ConnectionState.done &&
+                snapshot.data == null &&
+                widget.order == null) {
               return const Padding(
                 padding: EdgeInsets.symmetric(vertical: 8),
                 child: LinearProgressIndicator(),
               );
             }
-            if (snapshot.hasError) {
+            if (snapshot.hasError && widget.order == null) {
               return Text('Gagal memuat invoice: ${snapshot.error}');
             }
-            final invoice = snapshot.data;
+
+            // Prefer fetched invoice, fallback to synthesized invoice from order details
+            final invoice = snapshot.data ??
+                (widget.order != null
+                    ? Invoice(
+                        id: widget.order!.id,
+                        orderId: widget.order!.id,
+                        orderNumber: widget.order!.number,
+                        number: 'INV-${widget.order!.number}',
+                        state: 'posted',
+                        paymentState: widget.order!.paymentStatus,
+                        total: widget.order!.total,
+                        amountPaid: widget.order!.amountPaid,
+                        amountDue: widget.order!.amountDue > 0
+                            ? widget.order!.amountDue
+                            : (widget.order!.isPaid ? 0 : widget.order!.total),
+                        changeAmount: 0,
+                        paymentMethod: widget.order!.paymentMethod,
+                        currency: widget.order!.currency,
+                      )
+                    : null);
+
             if (invoice == null) {
               return const Card(
                 child: Padding(

@@ -95,6 +95,19 @@ class MockOrderRepository implements OrderRepository {
     return index;
   }
 
+  void recordPayment(int id, {
+    required String paymentStatus,
+    required String paymentMethod,
+    required int amountPaid,
+    required int amountDue,
+  }) {
+    final idx = _indexOf(id);
+    _db[idx]['payment_status'] = paymentStatus;
+    _db[idx]['payment_method'] = paymentMethod;
+    _db[idx]['amount_paid'] = amountPaid;
+    _db[idx]['amount_due'] = amountDue;
+  }
+
   @override
   Future<List<Order>> list({
     OrderStatus? status,

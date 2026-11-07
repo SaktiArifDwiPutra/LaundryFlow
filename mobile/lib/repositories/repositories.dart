@@ -29,12 +29,14 @@ final AuthRepository authRepository =
     useMock ? MockAuthRepository() : OdooAuthRepository(apiClient);
 final CustomerRepository customerRepository =
     useMock ? MockCustomerRepository() : OdooCustomerRepository(apiClient);
- 
-final OrderRepository orderRepository =
-    useMock ? MockOrderRepository() : OdooOrderRepository(apiClient);
+
+final OdooInvoiceRepository _odooInvoiceRepo = OdooInvoiceRepository(apiClient);
+final OrderRepository orderRepository = useMock
+    ? MockOrderRepository()
+    : OdooOrderRepository(apiClient, invoiceRepository: _odooInvoiceRepo);
 final ServiceRepository serviceRepository =
     useMock ? MockServiceRepository() : OdooServiceRepository(apiClient);
 final InvoiceRepository invoiceRepository =
-    useMock ? MockInvoiceRepository(orderRepository) : OdooInvoiceRepository(apiClient);
+    useMock ? MockInvoiceRepository(orderRepository) : _odooInvoiceRepo;
 final WhatsAppRepository whatsappRepository =
     useMock ? MockWhatsAppRepository() : OdooWhatsAppRepository(apiClient);

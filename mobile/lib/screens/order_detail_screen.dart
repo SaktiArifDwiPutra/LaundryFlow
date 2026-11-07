@@ -682,8 +682,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
               // 6. Invoice & Payment Section
               InvoiceSection(
-                key: ValueKey('${order.id}-${order.status.code}'),
+                key: ValueKey('${order.id}-${order.status.code}-${order.paymentStatus}-${order.amountPaid}'),
                 orderId: order.id,
+                order: order,
                 onPaymentSuccess: _reload,
               ),
               const SizedBox(height: 20),
