@@ -96,7 +96,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await authRepository.logout();
-              currentUser.value = null;
+              await clearSession();
             },
           ),
         ],

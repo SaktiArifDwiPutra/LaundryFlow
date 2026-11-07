@@ -19,4 +19,11 @@ class AuthUser {
       sessionId: json['session_id'] as String,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'uid': uid,
+        'name': name,
+        'username': username,
+        'session_id': sessionId,
+      };
 }

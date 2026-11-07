@@ -99,7 +99,7 @@ class _QueueScreenState extends State<QueueScreen> {
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await authRepository.logout();
-              currentUser.value = null;
+              await clearSession();
             },
           ),
         ],

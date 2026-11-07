@@ -22,7 +22,7 @@ import 'whatsapp_repository.dart';
 
 final ApiClient apiClient = ApiClient(
   baseUrl: baseUrl,
-  onUnauthorized: () => currentUser.value = null,
+  onUnauthorized: () => clearSession(),
 );
 
 final AuthRepository authRepository =

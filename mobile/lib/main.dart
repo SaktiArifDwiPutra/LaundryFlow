@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 
 import 'models/auth_user.dart';
+import 'repositories/repositories.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'session.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  currentUser.addListener(() {
+    apiClient.sessionId = currentUser.value?.sessionId;
+  });
+  await initSession();
   runApp(const LaundryFlowApp());
 }
 
