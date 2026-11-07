@@ -247,7 +247,33 @@ class _OrderCard extends StatelessWidget {
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 6),
-                  StatusChip(status: order.status),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: (order.isPaid
+                                  ? Colors.green
+                                  : (order.isPartial ? Colors.orange : Colors.red))
+                              .withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          order.paymentLabel,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: order.isPaid
+                                ? Colors.green
+                                : (order.isPartial ? Colors.orange : Colors.red),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      StatusChip(status: order.status),
+                    ],
+                  ),
                 ],
               ),
             ],
