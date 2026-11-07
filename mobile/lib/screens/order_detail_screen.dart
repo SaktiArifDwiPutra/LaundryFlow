@@ -48,6 +48,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     _future = orderRepository.get(widget.orderId);
   }
 
+  void _reload() {
+    setState(() {
+      _future = orderRepository.get(widget.orderId);
+    });
+  }
+
   void _toast(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -158,11 +164,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       FilledButton.icon(
                         icon: const Icon(Icons.refresh),
                         label: const Text('Muat Ulang'),
-                        onPressed: () {
-                          setState(() {
-                            _future = orderRepository.get(widget.orderId);
-                          });
-                        },
+                        onPressed: _reload,
                       ),
                     ],
                   ),
@@ -547,20 +549,14 @@ class _OrderPaymentBadge extends StatelessWidget {
 }
 
 class _MoneyRow extends StatelessWidget {
-  const _MoneyRow({required this.label, required this.value, this.bold = false});
+  const _MoneyRow({required this.label, required this.value});
 
   final String label;
   final String value;
-  final bool bold;
 
   @override
   Widget build(BuildContext context) {
-    final style = bold
-        ? Theme.of(context)
-            .textTheme
-            .titleMedium
-            ?.copyWith(fontWeight: FontWeight.bold)
-        : Theme.of(context).textTheme.bodyMedium;
+    final style = Theme.of(context).textTheme.bodyMedium;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(

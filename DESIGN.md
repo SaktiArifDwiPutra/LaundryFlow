@@ -145,3 +145,4 @@ Modern 5-Anchor Navigation Bar with Elevated Central Action:
 ### 6.3 Adaptive Layout Support
 - On mobile viewports (< 600dp): Linear single-column flow with persistent bottom action dock and `SafeArea` bottom insets.
 - On tablet / wider viewports (>= 600dp): Split-view master-detail pattern where appropriate or centered constrained canvas (`maxWidth: 640dp`).
+

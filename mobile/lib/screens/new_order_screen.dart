@@ -37,7 +37,10 @@ class _FormData {
 }
 
 class NewOrderScreen extends StatefulWidget {
-  const NewOrderScreen({super.key});
+  const NewOrderScreen({super.key, this.initialCustomer});
+
+  /// Pre-fills the customer field when navigating from the customer list.
+  final Customer? initialCustomer;
 
   @override
   State<NewOrderScreen> createState() => _NewOrderScreenState();
@@ -59,6 +62,13 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   void initState() {
     super.initState();
     _dataFuture = _load();
+    // Pre-fill customer if provided (e.g., from customer list screen)
+    if (widget.initialCustomer != null) {
+      _customer = widget.initialCustomer;
+      if (widget.initialCustomer!.address.isNotEmpty) {
+        _address.text = widget.initialCustomer!.address;
+      }
+    }
   }
 
   Future<_FormData> _load() async {
@@ -362,7 +372,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<Service>(
-                    value: line.service,
+                    initialValue: line.service,
                     decoration: const InputDecoration(
                       labelText: 'Pilih Layanan Laundry',
                     ),
@@ -694,21 +704,14 @@ class _AmountRow extends StatelessWidget {
   const _AmountRow({
     required this.label,
     required this.value,
-    this.bold = false,
   });
 
   final String label;
   final String value;
-  final bool bold;
 
   @override
   Widget build(BuildContext context) {
-    final style = bold
-        ? Theme.of(context)
-            .textTheme
-            .titleMedium
-            ?.copyWith(fontWeight: FontWeight.bold)
-        : Theme.of(context).textTheme.bodyMedium;
+    final style = Theme.of(context).textTheme.bodyMedium;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(

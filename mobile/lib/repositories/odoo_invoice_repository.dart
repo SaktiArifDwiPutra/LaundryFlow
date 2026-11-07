@@ -33,7 +33,7 @@ class OdooInvoiceRepository implements InvoiceRepository {
   }) async {
     final body = <String, dynamic>{
       'payment_method': paymentMethod,
-      if (amountPaid != null) 'amount_paid': amountPaid,
+      'amount_paid': ?amountPaid,
       if (reference != null && reference.isNotEmpty) 'reference': reference,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
     };

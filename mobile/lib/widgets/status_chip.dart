@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../models/order_status.dart';
-import '../theme/app_colors.dart';
 
 class StatusChip extends StatelessWidget {
   const StatusChip({super.key, required this.status});

@@ -41,12 +41,16 @@ class SettingsScreen extends StatelessWidget {
     } finally {
       await clearSession();
     }
+    // ValueListenableBuilder in main.dart handles the navigation to LoginScreen,
+    // but we also pop any stacked routes to avoid a stale navigator state.
+    if (context.mounted) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final user = currentUser.value;
 
     return Scaffold(
@@ -132,41 +136,35 @@ class SettingsScreen extends StatelessWidget {
             builder: (context, _) {
               final currentMode = themeController.themeMode;
               return Card(
-                child: Column(
-                  children: [
-                    RadioListTile<ThemeMode>(
-                      value: ThemeMode.system,
-                      groupValue: currentMode,
-                      title: const Text('Ikuti Sistem (Default)'),
-                      subtitle: const Text('Otomatis berganti terang/gelap'),
-                      secondary: const Icon(Icons.brightness_auto),
-                      onChanged: (mode) {
-                        if (mode != null) themeController.setThemeMode(mode);
-                      },
-                    ),
-                    const Divider(height: 1),
-                    RadioListTile<ThemeMode>(
-                      value: ThemeMode.light,
-                      groupValue: currentMode,
-                      title: const Text('Mode Terang (Light)'),
-                      subtitle: const Text('Tampilan bersih dan kontras tinggi'),
-                      secondary: const Icon(Icons.light_mode),
-                      onChanged: (mode) {
-                        if (mode != null) themeController.setThemeMode(mode);
-                      },
-                    ),
-                    const Divider(height: 1),
-                    RadioListTile<ThemeMode>(
-                      value: ThemeMode.dark,
-                      groupValue: currentMode,
-                      title: const Text('Mode Gelap (Dark)'),
-                      subtitle: const Text('Nyaman untuk operasional malam'),
-                      secondary: const Icon(Icons.dark_mode),
-                      onChanged: (mode) {
-                        if (mode != null) themeController.setThemeMode(mode);
-                      },
-                    ),
-                  ],
+                child: RadioGroup<ThemeMode>(
+                  groupValue: currentMode,
+                  onChanged: (mode) {
+                    if (mode != null) themeController.setThemeMode(mode);
+                  },
+                  child: Column(
+                    children: [
+                      RadioListTile<ThemeMode>(
+                        value: ThemeMode.system,
+                        title: const Text('Ikuti Sistem (Default)'),
+                        subtitle: const Text('Otomatis berganti terang/gelap'),
+                        secondary: const Icon(Icons.brightness_auto),
+                      ),
+                      const Divider(height: 1),
+                      RadioListTile<ThemeMode>(
+                        value: ThemeMode.light,
+                        title: const Text('Mode Terang (Light)'),
+                        subtitle: const Text('Tampilan bersih dan kontras tinggi'),
+                        secondary: const Icon(Icons.light_mode),
+                      ),
+                      const Divider(height: 1),
+                      RadioListTile<ThemeMode>(
+                        value: ThemeMode.dark,
+                        title: const Text('Mode Gelap (Dark)'),
+                        subtitle: const Text('Nyaman untuk operasional malam'),
+                        secondary: const Icon(Icons.dark_mode),
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -234,3 +232,4 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 }
+

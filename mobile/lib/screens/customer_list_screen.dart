@@ -4,6 +4,7 @@ import '../models/customer.dart';
 import '../repositories/repositories.dart';
 import '../theme/app_colors.dart';
 import 'customer_form_screen.dart';
+import 'new_order_screen.dart';
 
 class CustomerListScreen extends StatefulWidget {
   const CustomerListScreen({super.key, this.selectMode = false});
@@ -17,7 +18,6 @@ class CustomerListScreen extends StatefulWidget {
 class _CustomerListScreenState extends State<CustomerListScreen> {
   final _search = TextEditingController();
   late Future<List<Customer>> _future;
-  bool _deleting = false;
 
   @override
   void initState() {
@@ -55,6 +55,100 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     );
   }
 
+  Future<void> _openCustomerActions(Customer c) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.lightBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        c.name.isNotEmpty ? c.name[0].toUpperCase() : '?',
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(c.name,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 15)),
+                        if (c.phone.isNotEmpty)
+                          Text(c.phone,
+                              style: const TextStyle(
+                                  fontSize: 13, color: AppColors.neutral)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.add_shopping_cart_outlined,
+                  color: AppColors.primary),
+              title: const Text('Buat Pesanan Baru'),
+              subtitle:
+                  const Text('Langsung buat pesanan untuk pelanggan ini'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => NewOrderScreen(initialCustomer: c),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading:
+                  const Icon(Icons.delete_outline, color: AppColors.danger),
+              title: const Text('Hapus Pelanggan',
+                  style: TextStyle(color: AppColors.danger)),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _deleteCustomer(c);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _deleteCustomer(Customer c) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -82,7 +176,6 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     );
     if (confirmed != true || !mounted) return;
 
-    setState(() => _deleting = true);
     try {
       await customerRepository.delete(c.id);
       if (!mounted) return;
@@ -95,8 +188,6 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Gagal menghapus: $e')),
       );
-    } finally {
-      if (mounted) setState(() => _deleting = false);
     }
   }
 
@@ -229,7 +320,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                           borderRadius: BorderRadius.circular(14),
                           onTap: widget.selectMode
                               ? () => Navigator.of(context).pop(c)
-                              : null,
+                              : () => _openCustomerActions(c),
                           child: Padding(
                             padding: const EdgeInsets.all(14),
                             child: Row(
@@ -297,11 +388,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                                 if (widget.selectMode)
                                   const Icon(Icons.chevron_right, color: AppColors.primary)
                                 else
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
-                                    tooltip: 'Hapus Pelanggan',
-                                    onPressed: _deleting ? null : () => _deleteCustomer(c),
-                                  ),
+                                  const Icon(Icons.more_vert, color: AppColors.neutral, size: 20),
                               ],
                             ),
                           ),

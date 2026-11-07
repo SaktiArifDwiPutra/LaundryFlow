@@ -84,3 +84,4 @@ class StatusColor {
   final Color text;
   final Color icon;
 }
+

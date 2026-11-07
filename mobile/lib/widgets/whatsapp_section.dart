@@ -53,7 +53,7 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   DropdownButtonFormField<String>(
-                    value: selectedTemplate,
+                    initialValue: selectedTemplate,
                     decoration: const InputDecoration(
                       labelText: 'Pilih Template Pesan',
                     ),
@@ -144,7 +144,7 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
                           ),
                         );
                       } catch (e) {
-                        if (!ctx.mounted) return;
+                        if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('Gagal membuat pratinjau: $e')),
                         );
