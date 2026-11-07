@@ -44,7 +44,13 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
               children: [
                 Icon(Icons.chat, color: AppColors.success),
                 SizedBox(width: 8),
-                Text('Kirim Notifikasi WhatsApp'),
+                Expanded(
+                  child: Text(
+                    'Kirim Notifikasi WhatsApp',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
             content: SingleChildScrollView(
@@ -54,25 +60,38 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
                 children: [
                   DropdownButtonFormField<String>(
                     initialValue: selectedTemplate,
+                    isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Pilih Template Pesan',
                     ),
                     items: const [
                       DropdownMenuItem(
                         value: 'invoice',
-                        child: Text('Nota / Faktur Digital'),
+                        child: Text(
+                          'Nota / Faktur Digital',
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                       DropdownMenuItem(
                         value: 'ready',
-                        child: Text('Cucian Siap Diambil / Diantar'),
+                        child: Text(
+                          'Cucian Siap Diambil / Diantar',
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                       DropdownMenuItem(
                         value: 'reminder',
-                        child: Text('Pengingat Cucian'),
+                        child: Text(
+                          'Pengingat Cucian',
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                       DropdownMenuItem(
                         value: 'custom',
-                        child: Text('Pesan Kustom'),
+                        child: Text(
+                          'Pesan Kustom',
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ],
                     onChanged: (val) {

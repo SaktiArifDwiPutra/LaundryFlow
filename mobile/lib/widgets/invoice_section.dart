@@ -61,7 +61,13 @@ class _InvoiceSectionState extends State<InvoiceSection> {
               children: [
                 Icon(Icons.point_of_sale, color: AppColors.primary),
                 SizedBox(width: 8),
-                Text('Catat Pembayaran Kasir'),
+                Expanded(
+                  child: Text(
+                    'Catat Pembayaran Kasir',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
             content: SingleChildScrollView(
