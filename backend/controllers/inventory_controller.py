@@ -41,16 +41,19 @@ class LaundryInventoryController(BaseApiController):
 
         return user, None
 
-    def _get_internal_locations(self, env):
+    def _get_internal_locations(self, env_or_req):
         """Mengambil record lokasi internal gudang yang sah untuk perusahaan aktif."""
+        env = getattr(env_or_req, 'env', env_or_req)
         company_id = env.company.id
         return env['stock.location'].search([
             ('usage', '=', 'internal'),
             ('company_id', 'in', (False, company_id))
         ])
 
-    def _serialize_product_inventory(self, product, internal_locations, env):
+    def _serialize_product_inventory(self, product, internal_locations, env_or_req):
         """Format data produk inventory dan seluruh batch-nya."""
+        env = getattr(env_or_req, 'env', env_or_req)
+
         # Hitung stok aktual murni dari lokasi internal
         quants = env['stock.quant'].search([
             ('product_id', '=', product.id),
@@ -76,9 +79,14 @@ class LaundryInventoryController(BaseApiController):
                 'batch_number': lot.name,
                 'received_date': lot.receipt_date.isoformat() if lot.receipt_date else (lot.create_date.date().isoformat() if lot.create_date else None),
                 'expiration_date': lot.expiration_date.isoformat() if lot.expiration_date else None,
+                'days_to_expiration': lot.days_to_expiration,
                 'quantity': float(lot_qty),
                 'expiration_status': lot.expiration_status or 'unknown',
+                'supplier': lot.supplier_id.name if lot.supplier_id else None,
             })
+
+        # Supplier utama dari seller_ids (jika ada)
+        main_supplier = product.seller_ids[0].partner_id.name if product.seller_ids else None
 
         return {
             'id': product.id,
@@ -86,9 +94,13 @@ class LaundryInventoryController(BaseApiController):
             'name': product.name or '',
             'category': product.categ_id.name if product.categ_id else '',
             'quantity_on_hand': float(quantity_on_hand),
+            'min_stock_qty': float(product.min_stock_qty or 0.0),
+            'is_low_stock': bool(product.is_low_stock),
+            'has_expired_batches': bool(product.has_expired_batches),
             'uom': product.uom_id.name if product.uom_id else '',
             'purchase_price': float(product.standard_price or 0.0),
             'sale_price': float(product.list_price or 0.0),
+            'supplier': main_supplier,
             'batches': batches_data,
         }
 

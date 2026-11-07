@@ -53,6 +53,11 @@ class ApiDocsController(http.Controller):
                     "4. **Pilihan Kecepatan Pengerjaan (Reguler & Same Day Service)**:\n"
                     "   - Same Day Service adalah pilihan prioritas pengerjaan pesanan, bukan produk duplikat.\n"
                     "   - Opsi `service_speed` bernilai `regular` (biaya 0) atau `same_day` (biaya tambahan snapshot dari konfigurasi Odoo).\n\n"
+                    "5. **Workflow & Status Pesanan Laundry**:\n"
+                    "   - Endpoint `PATCH /api/laundry/orders/{order_id}/status` memungkinkan operator internal dan admin memperbarui tahapan status pesanan secara bertahap.\n"
+                    "   - Pipeline tahapan status dinamis sesuai jenis layanan (`Cuci Setrika`, `Cuci Lipat`, `Setrika Saja`, `Karpet`) dan metode pengantaran (`pickup` vs `delivery`).\n"
+                    "   - Validasi ketat mencegah pelompatan status (HTTP 409 Conflict).\n"
+                    "   - Pelanggan/portal dilarang mengubah status pesanan (HTTP 403 Forbidden).\n\n"
                     "### Mekanisme Autentikasi\n"
                     "Endpoint yang dilindungi memerlukan autentikasi sesi Odoo yang valid:\n"
                     "- Header `Authorization: Bearer <session_id>`\n"
@@ -652,18 +657,23 @@ class ApiDocsController(http.Controller):
                         "operationId": "createOrder",
                         "description": (
                             "Membuat transaksi pesanan laundry dengan dukungan satu atau beberapa layanan sekaligus (multi-detail).\n\n"
-                            "**Aturan Kalkulasi Backend & Integritas:**\n"
-                            "1. **Backend Menghitung Ulang Seluruh Harga**: Total harga tidak pernah mempercayai nilai dari Flutter. Manipulasi harga client diabaikan.\n"
+                            "**Aturan Kalkulasi Backend & Integritas (Tugas 13):**\n"
+                            "1. **Backend Menghitung Ulang Seluruh Harga**: Total harga tidak pernah mempercayai nilai dari Flutter/client. Manipulasi harga client diabaikan sepenuhnya.\n"
                             "2. **Kalkulasi Satuan**:\n"
                             "   - **Kg (Berat)**: `subtotal = berat * harga_per_kg`\n"
                             "   - **Pcs (Satuan)**: `subtotal = jumlah * harga_per_pcs`\n"
                             "   - **Set (Perlengkapan)**: `subtotal = jumlah_set * harga_per_set`\n"
-                            "   - **Karpet (m²)**: `luas = panjang * lebar`, `subtotal = luas * harga_per_m²`. Panjang dan lebar wajib positif (> 0); ukuran nol atau negatif ditolak dengan HTTP 400.\n"
-                            "3. **Kecepatan Pengerjaan**:\n"
+                            "   - **Karpet (m²)**: `luas = panjang * lebar`, `subtotal = luas * harga_per_m²`. Panjang dan lebar disimpan pada order line dan wajib positif (> 0); ukuran nol atau negatif ditolak dengan HTTP 400.\n"
+                            "3. **Validasi Kuantitas & Satuan (UoM)**:\n"
+                            "   - Input kuantitas atau berat tidak boleh nol atau negatif (wajib > 0); nilai nol atau negatif ditolak dengan HTTP 400.\n"
+                            "   - Satuan (UoM) harus sesuai dan kompatibel dengan produk layanan; UoM tidak kompatibel ditolak dengan HTTP 400.\n"
+                            "4. **Kecepatan Pengerjaan**:\n"
                             "   - `service_speed`: `regular` atau `same_day`.\n"
-                            "   - Biaya surcharge Same Day di-snapshot ke `service_speed_fee` dari konfigurasi Odoo.\n"
-                            "   - Jika Same Day dinonaktifkan oleh Admin, pembuatan pesanan ditolak dengan HTTP 400.\n"
-                            "4. **Snapshot Harga Transaksi**: Harga satuan saat transaksi disimpan pada record line pesanan sehingga perubahan harga katalog Odoo masa depan tidak mengubah transaksi lama.\n\n"
+                            "   - Biaya surcharge Same Day hanya diterapkan jika sudah dikonfigurasi di Odoo (`laundry.same_day_surcharge`).\n"
+                            "   - Jika Same Day dinonaktifkan oleh Admin, pembuatan pesanan Same Day ditolak dengan HTTP 400.\n"
+                            "5. **Snapshot Harga Transaksi & Immutabilitas**:\n"
+                            "   - Harga satuan saat transaksi disimpan langsung (`price_unit`) pada order line dari katalog Odoo.\n"
+                            "   - Perubahan harga katalog di masa depan tidak akan pernah mengubah transaksi atau tagihan pesanan lama.\n\n"
                             "**Route Alias:**\n"
                             "- `POST /api/laundry/orders`\n"
                             "- `POST /api/orders`"
@@ -846,6 +856,405 @@ class ApiDocsController(http.Controller):
                             }
                         }
                     }
+                },
+                "/api/laundry/orders/{order_id}/status": {
+                    "patch": {
+                        "tags": ["Orders"],
+                        "summary": "Perbarui Status Pesanan Laundry",
+                        "operationId": "updateOrderStatus",
+                        "description": (
+                            "Memperbarui tahapan status pengerjaan pesanan laundry berdasarkan alur kerja (workflow) dinamis pesanan.\n\n"
+                            "**Aturan Workflow & Hak Akses:**\n"
+                            "- **Hak Akses:** Hanya dapat diakses oleh operator internal atau administrator (`base.group_user`). Akses oleh pelanggan (Portal) ditolak dengan HTTP 403 Forbidden.\n"
+                            "- **Jalur Tahapan Dinamis:** Tahapan proses ditentukan oleh jenis layanan pada pesanan (misal: 'Setrika Saja' langsung received -> ironing -> ready; 'Cuci Lipat' received -> washing -> drying -> ready; 'Cuci Setrika' received -> washing -> drying -> ironing -> ready).\n"
+                            "- **Tipe Penyelesaian:** Pesanan `pickup` selesai langsung dari ready -> completed. Pesanan `delivery` melalui ready -> out_for_delivery -> completed.\n"
+                            "- **Validasi Transisi:** Perubahan status yang melompati tahapan wajib atau tidak sesuai pipeline layanan ditolak dengan HTTP 409 Conflict.\n"
+                            "- **Pembatalan:** Pesanan dapat dibatalkan (`to: \"cancelled\"`) kapan saja selama belum berstatus `completed` atau sudah `cancelled`.\n"
+                            "- **Proteksi Konkurensi:** Menggunakan row-level locking (`FOR UPDATE`) pada basis data Odoo.\n\n"
+                            "**Route Alias:**\n"
+                            "- `PATCH /api/laundry/orders/{order_id}/status`\n"
+                            "- `PATCH /api/orders/{order_id}/status`"
+                        ),
+                        "security": [{"BearerAuth": []}, {"SessionHeaderAuth": []}],
+                        "parameters": [
+                            {"name": "order_id", "in": "path", "required": True, "description": "ID unik transaksi pesanan laundry.", "schema": {"type": "integer"}, "example": 123}
+                        ],
+                        "requestBody": {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": ["to"],
+                                        "properties": {
+                                            "to": {
+                                                "type": "string",
+                                                "enum": ["washing", "drying", "ironing", "ready", "out_for_delivery", "completed", "cancelled"],
+                                                "description": "Status tujuan yang diinginkan.",
+                                                "example": "washing"
+                                            }
+                                        }
+                                    },
+                                    "example": {
+                                        "to": "washing"
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "200": {
+                                "description": "Status pesanan berhasil diperbarui.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": True,
+                                            "message": "Status pesanan berhasil diperbarui.",
+                                            "data": {
+                                                "id": 123,
+                                                "order_number": "LND/2026/0001",
+                                                "previous_status": "received",
+                                                "current_status": "washing",
+                                                "next_status": "drying",
+                                                "stages": [
+                                                    "received",
+                                                    "washing",
+                                                    "drying",
+                                                    "ironing",
+                                                    "ready",
+                                                    "completed"
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "400": {
+                                "description": "Parameter 'to' tidak disediakan atau status target tidak dikenali.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": False,
+                                            "message": "Parameter status tujuan 'to' wajib diisi."
+                                        }
+                                    }
+                                }
+                            },
+                            "401": {
+                                "description": "Autentikasi diperlukan.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": False,
+                                            "message": "Autentikasi diperlukan. Akses tidak diizinkan."
+                                        }
+                                    }
+                                }
+                            },
+                            "403": {
+                                "description": "Akses ditolak. Pelanggan/Portal tidak memiliki izin mengubah status pesanan.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": False,
+                                            "message": "Akses ditolak. Pelanggan tidak memiliki izin untuk mengubah status pesanan."
+                                        }
+                                    }
+                                }
+                            },
+                            "404": {
+                                "description": "Pesanan laundry tidak ditemukan.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": False,
+                                            "message": "Pesanan laundry dengan ID 999999 tidak ditemukan."
+                                        }
+                                    }
+                                }
+                            },
+                            "409": {
+                                "description": "Konflik transisi status (melompati tahapan wajib atau tidak sesuai alur layanan).",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": False,
+                                            "message": "Transisi status tidak valid: pesanan harus melewati tahapan ['received', 'washing', 'drying', 'ironing', 'ready', 'completed']."
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "/api/laundry/orders/{order_id}/send-whatsapp": {
+                    "post": {
+                        "tags": ["Orders"],
+                        "summary": "Kirim Notifikasi WhatsApp Pesanan (Manual/Resend)",
+                        "description": (
+                            "Mengirim notifikasi WhatsApp terkait pesanan laundry pelanggan.\n\n"
+                            "**Alias Routing**:\n"
+                            "- `POST /api/laundry/orders/{order_id}/send-whatsapp`\n"
+                            "- `POST /api/orders/{order_id}/send-whatsapp`\n\n"
+                            "**Pilihan Template**:\n"
+                            "- `invoice`: Mengirim rincian nota pesanan baru.\n"
+                            "- `ready`: Memberi tahu pakaian sudah selesai dan siap diambil/diantar.\n"
+                            "- `reminder`: Mengingatkan pesanan yang belum diambil/selesai.\n"
+                            "- `custom`: Pesan khusus (wajib mengisi `custom_message`)."
+                        ),
+                        "security": [{"BearerAuth": []}, {"SessionHeaderAuth": []}, {"ApiKeyHeaderAuth": []}],
+                        "parameters": [
+                            {
+                                "name": "order_id",
+                                "in": "path",
+                                "required": True,
+                                "schema": {"type": "integer"},
+                                "description": "ID unik pesanan laundry di Odoo."
+                            }
+                        ],
+                        "requestBody": {
+                            "required": False,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "template": {
+                                                "type": "string",
+                                                "enum": ["invoice", "ready", "reminder", "custom"],
+                                                "default": "invoice",
+                                                "description": "Jenis template pesan WhatsApp yang akan dikirim."
+                                            },
+                                            "custom_message": {
+                                                "type": "string",
+                                                "description": "Teks pesan kustom jika template bernilai 'custom'."
+                                            },
+                                            "phone": {
+                                                "type": "string",
+                                                "description": "Nomor WhatsApp tujuan opsional jika ingin mengubah nomor penerima."
+                                            },
+                                            "send_immediate": {
+                                                "type": "boolean",
+                                                "default": True,
+                                                "description": "Kirim langsung (True) atau masukkan antrean outbox (False)."
+                                            }
+                                        }
+                                    },
+                                    "example": {
+                                        "template": "invoice",
+                                        "send_immediate": True
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "200": {
+                                "description": "Notifikasi WhatsApp berhasil dikirim atau dimasukkan ke antrean gateway.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": True,
+                                            "message": "Notifikasi WhatsApp berhasil diproses.",
+                                            "data": {
+                                                "order_id": 491,
+                                                "order_number": "LDR/2026/00536",
+                                                "recipient_phone": "628123456789",
+                                                "template_used": "invoice",
+                                                "outbox_id": 12,
+                                                "is_delivered": True,
+                                                "whatsapp_status": "delivered",
+                                                "whatsapp_last_sent": "2026-11-06 10:30:00"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "400": {
+                                "description": "Parameter template tidak valid, nomor telepon salah, atau payload salah.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": False,
+                                            "message": "Nomor telepon tujuan tidak valid atau tidak ditemukan."
+                                        }
+                                    }
+                                }
+                            },
+                            "401": {"$ref": "#/components/responses/UnauthorizedError"},
+                            "403": {"$ref": "#/components/responses/ForbiddenError"},
+                            "404": {
+                                "description": "Pesanan tidak ditemukan.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": False,
+                                            "message": "Pesanan dengan ID 491 tidak ditemukan."
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "/api/laundry/orders/{order_id}/whatsapp-status": {
+                    "get": {
+                        "tags": ["Orders"],
+                        "summary": "Cek Status WhatsApp & Riwayat Outbox Pesanan",
+                        "description": (
+                            "Mengembalikan status pengiriman WhatsApp terakhir dan riwayat outbox pesan.\n\n"
+                            "**Alias Routing**:\n"
+                            "- `GET /api/laundry/orders/{order_id}/whatsapp-status`\n"
+                            "- `GET /api/orders/{order_id}/whatsapp-status`"
+                        ),
+                        "security": [{"BearerAuth": []}, {"SessionHeaderAuth": []}, {"ApiKeyHeaderAuth": []}],
+                        "parameters": [
+                            {
+                                "name": "order_id",
+                                "in": "path",
+                                "required": True,
+                                "schema": {"type": "integer"},
+                                "description": "ID unik pesanan laundry."
+                            }
+                        ],
+                        "responses": {
+                            "200": {
+                                "description": "Status pengiriman dan riwayat outbox berhasil diambil.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": True,
+                                            "data": {
+                                                "order_id": 491,
+                                                "order_number": "LDR/2026/00536",
+                                                "whatsapp_status": "delivered",
+                                                "whatsapp_phone": "628123456789",
+                                                "whatsapp_sent": True,
+                                                "whatsapp_last_sent": "2026-11-06 10:30:00",
+                                                "outbox_count": 1,
+                                                "history": [
+                                                    {
+                                                        "id": 12,
+                                                        "name": "Invoice - LDR/2026/00536",
+                                                        "phone": "628123456789",
+                                                        "is_delivered": True,
+                                                        "is_queued": False,
+                                                        "sent_date": "2026-11-06 10:30:00",
+                                                        "create_date": "2026-11-06 10:29:55",
+                                                        "error_msg": None,
+                                                        "message_preview": "*NOTA TRANSAKSI LAUNDRYFLOW*..."
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "401": {"$ref": "#/components/responses/UnauthorizedError"},
+                            "403": {"$ref": "#/components/responses/ForbiddenError"},
+                            "404": {
+                                "description": "Pesanan tidak ditemukan.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": False,
+                                            "message": "Pesanan dengan ID 491 tidak ditemukan."
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "/api/laundry/orders/{order_id}/whatsapp-preview": {
+                    "get": {
+                        "tags": ["Orders"],
+                        "summary": "Pratinjau Pesan WhatsApp Sebelum Dikirim",
+                        "description": (
+                            "Melihat pratinjau teks pesan WhatsApp yang telah dirender menggunakan data aktual pesanan tanpa mengirimnya ke gateway.\n\n"
+                            "**Alias Routing**:\n"
+                            "- `GET /api/laundry/orders/{order_id}/whatsapp-preview`\n"
+                            "- `GET /api/orders/{order_id}/whatsapp-preview`"
+                        ),
+                        "security": [{"BearerAuth": []}, {"SessionHeaderAuth": []}, {"ApiKeyHeaderAuth": []}],
+                        "parameters": [
+                            {
+                                "name": "order_id",
+                                "in": "path",
+                                "required": True,
+                                "schema": {"type": "integer"},
+                                "description": "ID unik pesanan laundry."
+                            },
+                            {
+                                "name": "template",
+                                "in": "query",
+                                "required": False,
+                                "schema": {
+                                    "type": "string",
+                                    "enum": ["invoice", "ready", "reminder", "custom"],
+                                    "default": "invoice"
+                                },
+                                "description": "Jenis template pesan WhatsApp yang ingin dipratinjau."
+                            },
+                            {
+                                "name": "custom_message",
+                                "in": "query",
+                                "required": False,
+                                "schema": {"type": "string"},
+                                "description": "Teks pesan kustom jika template bernilai 'custom'."
+                            },
+                            {
+                                "name": "phone",
+                                "in": "query",
+                                "required": False,
+                                "schema": {"type": "string"},
+                                "description": "Nomor telepon tujuan alternatif untuk override."
+                            }
+                        ],
+                        "responses": {
+                            "200": {
+                                "description": "Pratinjau pesan berhasil dirender.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": True,
+                                            "data": {
+                                                "order_id": 491,
+                                                "order_number": "LDR/2026/00536",
+                                                "customer_name": "Budi Santoso",
+                                                "template": "invoice",
+                                                "recipient_phone": "628123456789",
+                                                "message": "*NOTA TRANSAKSI LAUNDRYFLOW*\n\nHalo *Budi Santoso*...",
+                                                "character_count": 420
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "400": {
+                                "description": "Template tidak valid atau nomor override salah.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": False,
+                                            "message": "Template 'invalid_name' tidak valid."
+                                        }
+                                    }
+                                }
+                            },
+                            "401": {"$ref": "#/components/responses/UnauthorizedError"},
+                            "403": {"$ref": "#/components/responses/ForbiddenError"},
+                            "404": {
+                                "description": "Pesanan tidak ditemukan.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": False,
+                                            "message": "Pesanan dengan ID 491 tidak ditemukan."
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             },
             "components": {
@@ -943,8 +1352,10 @@ class ApiDocsController(http.Controller):
                             "batch_number": {"type": "string", "description": "Nomor identifikasi batch/lot.", "example": "BATCH-LIQ-202610-01"},
                             "received_date": {"type": "string", "format": "date", "nullable": True, "description": "Tanggal penerimaan barang di gudang.", "example": "2026-10-15"},
                             "expiration_date": {"type": "string", "format": "date", "nullable": True, "description": "Tanggal kedaluwarsa batch (null jika tanpa kedaluwarsa).", "example": "2027-04-15"},
+                            "days_to_expiration": {"type": "integer", "nullable": True, "description": "Jumlah hari menuju tanggal kedaluwarsa.", "example": 165},
                             "quantity": {"type": "number", "description": "Jumlah fisik stok batch pada lokasi internal.", "example": 10.0},
-                            "expiration_status": {"type": "string", "enum": ["safe", "expiring_soon", "expired", "unknown"], "description": "Status kedaluwarsa batch.", "example": "safe"}
+                            "expiration_status": {"type": "string", "enum": ["safe", "expiring_soon", "expired", "unknown"], "description": "Status kedaluwarsa batch.", "example": "safe"},
+                            "supplier": {"type": "string", "nullable": True, "description": "Nama supplier yang menyediakan batch ini.", "example": "PT Kimia Laundry Nasional"}
                         }
                     },
                     "InventoryProductItem": {
@@ -956,9 +1367,13 @@ class ApiDocsController(http.Controller):
                             "name": {"type": "string", "description": "Nama bahan laundry.", "example": "Deterjen Cair"},
                             "category": {"type": "string", "description": "Kategori bahan (`Bahan Laundry`).", "example": "Bahan Laundry"},
                             "quantity_on_hand": {"type": "number", "description": "Stok fisik aktual murni dari lokasi gudang internal Odoo.", "example": 25.0},
+                            "min_stock_qty": {"type": "number", "description": "Batas minimum stok untuk reordering alert.", "example": 10.0},
+                            "is_low_stock": {"type": "boolean", "description": "True jika stok aktual kurang dari atau sama dengan minimum stok.", "example": False},
+                            "has_expired_batches": {"type": "boolean", "description": "True jika ada batch kedaluwarsa dengan stok tersisa.", "example": False},
                             "uom": {"type": "string", "description": "Satuan ukuran bahan (kg, L).", "example": "L"},
                             "purchase_price": {"type": "number", "description": "Harga beli / Cost standar Odoo (standard_price). Bersifat rahasia internal dan dilarang untuk pelanggan.", "example": 18000.0},
                             "sale_price": {"type": "number", "description": "Harga jual jika relevan (list_price).", "example": 0.0},
+                            "supplier": {"type": "string", "nullable": True, "description": "Nama supplier utama bahan laundry.", "example": "PT Kimia Laundry Nasional"},
                             "batches": {
                                 "type": "array",
                                 "description": "Rincian seluruh batch/lot yang tercatat untuk bahan ini.",
@@ -1123,7 +1538,7 @@ class ApiDocsController(http.Controller):
         )
 
     @http.route(
-        ["/api/docs", "/api/laundry/docs", "/docs"],
+        ["/api/docs", "/api/laundry/docs", "/docs", "/api/scalar", "/scalar"],
         type="http",
         auth="none",
         methods=["GET"],

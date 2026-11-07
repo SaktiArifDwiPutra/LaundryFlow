@@ -6,4 +6,10 @@ from . import test_laundry_order
 from . import test_service_speed
 from . import test_material_inventory
 from . import test_inventory_api
+from . import test_order_business_logic
+from . import test_order_workflow
+from . import test_order_status_api
+from . import test_phone_utils
+from . import test_wa_templates
+from . import test_order_whatsapp_api
 

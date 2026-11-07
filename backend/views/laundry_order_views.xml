@@ -10,6 +10,7 @@
                 <field name="partner_id"/>
                 <field name="service_speed"/>
                 <field name="service_speed_fee" optional="show"/>
+                <field name="delivery_type" optional="show"/>
                 <field name="weight"/>
                 <field name="total_amount"/>
                 <field name="user_id" widget="many2one_avatar_user"/>
@@ -24,8 +25,22 @@
         <field name="arch" type="xml">
             <form string="Pesanan Laundry">
                 <header>
+                    <button name="action_washing" string="Mulai Cuci" type="object" class="oe_highlight"
+                            invisible="state != 'received'"/>
+                    <button name="action_drying" string="Mulai Keringkan" type="object" class="oe_highlight"
+                            invisible="state != 'washing'"/>
+                    <button name="action_ironing" string="Mulai Setrika" type="object" class="oe_highlight"
+                            invisible="state not in ('received', 'drying')"/>
+                    <button name="action_ready" string="Siap Diambil / Dikirim" type="object" class="oe_highlight"
+                            invisible="state not in ('drying', 'ironing')"/>
+                    <button name="action_out_for_delivery" string="Kirim ke Pelanggan" type="object" class="oe_highlight"
+                            invisible="state != 'ready' or delivery_type != 'delivery'"/>
+                    <button name="action_complete" string="Selesai" type="object" class="oe_highlight"
+                            invisible="(delivery_type == 'delivery' and state != 'out_for_delivery') or (delivery_type == 'pickup' and state != 'ready')"/>
+                    <button name="action_cancel" string="Batalkan" type="object"
+                            invisible="state in ('completed', 'cancelled')"/>
                     <field name="state" widget="statusbar"
-                           statusbar_visible="received,washing,ironing,ready,completed"/>
+                           statusbar_visible="received,washing,drying,ironing,ready,completed"/>
                 </header>
                 <sheet>
                     <div class="oe_title">
@@ -38,6 +53,7 @@
                             <field name="order_date"/>
                             <field name="service_speed"/>
                             <field name="service_speed_fee" invisible="service_speed != 'same_day'"/>
+                            <field name="delivery_type"/>
                             <field name="user_id"/>
                         </group>
                         <group>

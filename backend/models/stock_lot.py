@@ -47,11 +47,21 @@ class StockLot(models.Model):
     @api.model
     def _get_expiring_soon_days_threshold(self):
         """Batas hari untuk status expiring_soon dari konfigurasi Odoo (default: 30 hari)."""
-        param = self.env['ir.config_parameter'].sudo().get_param('laundry.expiring_soon_days', '30')
-        try:
-            return int(param)
-        except (ValueError, TypeError):
-            return 30
+        param_obj = self.env['ir.config_parameter'].sudo()
+        if hasattr(param_obj, 'get_int'):
+            return param_obj.get_int('laundry.expiring_soon_days', 30)
+        elif hasattr(param_obj, 'get_param'):
+            param = param_obj.get_param('laundry.expiring_soon_days', '30')
+            try:
+                return int(param)
+            except (ValueError, TypeError):
+                return 30
+        else:
+            rec = param_obj.search([('key', '=', 'laundry.expiring_soon_days')], limit=1)
+            try:
+                return int(rec.value) if rec else 30
+            except (ValueError, TypeError):
+                return 30
 
     @api.depends('expiration_date')
     def _compute_expiration_info(self):
@@ -121,7 +131,7 @@ class StockLot(models.Model):
         lot_vals = {}
         if receipt_date:
             lot_vals['receipt_date'] = receipt_date
-        if expiration_date:
+        if expiration_date is not None:
             lot_vals['expiration_date'] = expiration_date
         if supplier:
             supplier_id = supplier.id if isinstance(supplier, models.Model) else supplier
@@ -138,6 +148,8 @@ class StockLot(models.Model):
             }
             create_vals.update(lot_vals)
             lot = self.create(create_vals)
+            if 'expiration_date' in lot_vals and not lot_vals['expiration_date']:
+                lot.write({'expiration_date': False})
 
         # Update kuantitas stok menggunakan ORM resmi Odoo (stock.quant._update_available_quantity)
         self.env['stock.quant']._update_available_quantity(

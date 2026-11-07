@@ -77,8 +77,8 @@ class TestLaundryOrderDetails(TransactionCase):
 
         # Inventory Material (Consumable)
         cls.mat_detergent = cls.env["product.template"].create({
-            "name": "Deterjen Cair Premium",
-            "default_code": "MAT-DET-001",
+            "name": "Deterjen Cair Premium Test",
+            "default_code": "MAT-DET-TEST-999",
             "type": "consu",
             "is_storable": True,
             "list_price": 20000.0,

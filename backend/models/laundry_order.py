@@ -104,8 +104,10 @@ class LaundryOrder(models.Model):
         [
             ("received", "Diterima"),
             ("washing", "Sedang Dicuci"),
+            ("drying", "Sedang Dikeringkan"),
             ("ironing", "Sedang Disetrika"),
-            ("ready", "Siap Diambil"),
+            ("ready", "Siap Diambil / Siap Kirim"),
+            ("out_for_delivery", "Dalam Pengiriman"),
             ("completed", "Selesai"),
             ("cancelled", "Dibatalkan"),
         ],
@@ -113,6 +115,19 @@ class LaundryOrder(models.Model):
         required=True,
         default="received",
         index=True,
+        copy=False,
+        help="Alur status pengerjaan pesanan laundry.",
+    )
+    delivery_type = fields.Selection(
+        [
+            ("pickup", "Ambil Sendiri (Pickup)"),
+            ("delivery", "Antar ke Alamat (Delivery)"),
+        ],
+        string="Metode Pengambilan",
+        required=True,
+        default="pickup",
+        index=True,
+        help="Metode penyerahan cucian kepada pelanggan: Ambil sendiri di tempat (pickup) atau diantar kurir (delivery).",
     )
     invoice_id = fields.Many2one(
         "account.move",
@@ -120,6 +135,209 @@ class LaundryOrder(models.Model):
         readonly=True,
         copy=False,
     )
+
+    # -------------------------------------------------------------------------
+    # Integrasi WhatsApp Tracking & Outbox
+    # -------------------------------------------------------------------------
+    whatsapp_phone = fields.Char(
+        string="Nomor WhatsApp",
+        copy=False,
+        help="Nomor WhatsApp pelanggan untuk pengiriman notifikasi (format: 628xxx).",
+    )
+    whatsapp_sent = fields.Boolean(
+        string="WhatsApp Terkirim",
+        default=False,
+        readonly=True,
+        copy=False,
+        help="Menandakan apakah notifikasi WhatsApp telah berhasil dikirim ke pelanggan.",
+    )
+    whatsapp_last_sent = fields.Datetime(
+        string="Waktu Kirim WA Terakhir",
+        readonly=True,
+        copy=False,
+        help="Waktu terakhir pengiriman pesan WhatsApp pada pesanan ini.",
+    )
+    whatsapp_outbox_ids = fields.Many2many(
+        "infinys.wapi.outbox",
+        "laundry_order_wapi_outbox_rel",
+        "order_id",
+        "outbox_id",
+        string="Riwayat Pesan WhatsApp",
+        copy=False,
+        help="Daftar riwayat pesan WhatsApp yang telah dibuat/dikirim untuk pesanan ini.",
+    )
+    whatsapp_status = fields.Selection(
+        [
+            ("not_sent", "Belum Dikirim"),
+            ("pending", "Dalam Antrean"),
+            ("delivered", "Terkirim"),
+            ("failed", "Gagal"),
+        ],
+        string="Status WhatsApp",
+        compute="_compute_whatsapp_status",
+        store=False,
+        help="Status ringkas pengiriman WhatsApp berdasarkan riwayat pesan terakhir.",
+    )
+
+    @api.depends(
+        "whatsapp_outbox_ids",
+        "whatsapp_outbox_ids.is_delivered",
+        "whatsapp_outbox_ids.is_queued",
+        "whatsapp_outbox_ids.error_msg",
+    )
+    def _compute_whatsapp_status(self):
+        for order in self:
+            if not order.whatsapp_outbox_ids:
+                order.whatsapp_status = "not_sent"
+            else:
+                latest = order.whatsapp_outbox_ids.sorted(lambda r: r.id, reverse=True)[:1]
+                if latest.is_delivered:
+                    order.whatsapp_status = "delivered"
+                elif latest.error_msg and not latest.is_delivered:
+                    order.whatsapp_status = "failed"
+                elif latest.is_queued:
+                    order.whatsapp_status = "pending"
+                else:
+                    order.whatsapp_status = "not_sent"
+
+    def _get_partner_phone(self, partner=None):
+        """Ambil nomor telepon partner secara aman baik dari mobile maupun phone."""
+        target = partner or self.partner_id
+        if not target:
+            return ""
+        return getattr(target, "mobile", None) or getattr(target, "phone", None) or ""
+
+    @api.onchange("partner_id")
+    def _onchange_partner_id_set_whatsapp_phone(self):
+        for order in self:
+            if order.partner_id and not order.whatsapp_phone:
+                raw_phone = order._get_partner_phone()
+                if raw_phone:
+                    from ..utils.phone_utils import normalize_phone_number
+                    order.whatsapp_phone = normalize_phone_number(raw_phone)
+
+    def action_send_whatsapp_notification(self, template_type="invoice", custom_text=None, phone=None, send_immediate=True):
+        """
+        Kirim notifikasi WhatsApp untuk pesanan laundry ini menggunakan gateway WAPI (infinys.wapi.outbox).
+
+        :param template_type: Pilihan template: 'invoice', 'ready', 'reminder', 'custom'
+        :param custom_text: Isi pesan kustom jika template_type == 'custom'
+        :param phone: Nomor telepon tujuan alternatif (default menggunakan whatsapp_phone / partner_id)
+        :param send_immediate: Jika True, langsung kirim ke WAPI; jika False, biarkan dalam antrean outbox (cron)
+        :return: Dict status hasil pengiriman {'success': bool, 'message': str, 'outbox_id': int, 'is_delivered': bool}
+        """
+        self.ensure_one()
+
+        from ..utils.phone_utils import normalize_phone_number, validate_phone_number
+        from ..utils.wa_templates import get_whatsapp_message
+
+        # Tentukan nomor telepon tujuan
+        target_phone = phone or self.whatsapp_phone
+        if not target_phone and self.partner_id:
+            target_phone = self._get_partner_phone()
+
+        # Normalisasi dan validasi nomor telepon
+        normalized_phone = normalize_phone_number(target_phone)
+        is_valid, err_msg = validate_phone_number(normalized_phone)
+        if not is_valid:
+            return {
+                "success": False,
+                "message": f"Pengiriman WhatsApp gagal: {err_msg}",
+                "phone": target_phone,
+                "outbox_id": False,
+                "is_delivered": False,
+            }
+
+        # Simpan nomor yang sudah divalidasi ke pesanan jika belum ada
+        if not self.whatsapp_phone:
+            self.whatsapp_phone = normalized_phone
+
+        # Render pesan menggunakan template builder
+        company_name = self.company_id.name if hasattr(self, "company_id") and self.company_id else "LaundryFlow"
+        message_body = get_whatsapp_message(
+            self,
+            template_type=template_type,
+            custom_text=custom_text,
+            company_name=company_name,
+        )
+
+        subject_map = {
+            "invoice": f"Nota Pesanan {self.name}",
+            "created": f"Nota Pesanan {self.name}",
+            "order_created": f"Nota Pesanan {self.name}",
+            "ready": f"Pesanan Siap {self.name}",
+            "order_ready": f"Pesanan Siap {self.name}",
+            "reminder": f"Pengingat Pesanan {self.name}",
+            "custom": f"Pesan Laundry {self.name}",
+        }
+        subject = subject_map.get(template_type, f"Notifikasi Pesanan {self.name}")
+
+        # Buat record outbox di infinys.wapi.outbox
+        Outbox = self.env["infinys.wapi.outbox"].sudo()
+        outbox_vals = {
+            "name": subject,
+            "phone": normalized_phone,
+            "message": f"<p>{message_body.replace(chr(10), '<br/>')}</p>",
+            "is_queued": True,
+        }
+        outbox = Outbox.create(outbox_vals)
+
+        # Hubungkan outbox dengan pesanan ini
+        self.write({"whatsapp_outbox_ids": [(4, outbox.id)]})
+
+        delivered = False
+        send_error = None
+
+        if send_immediate:
+            try:
+                # Kirim langsung via method send_message_immediate
+                outbox.send_message_immediate()
+                delivered = bool(outbox.is_delivered)
+                send_error = outbox.error_msg
+            except Exception as e:
+                send_error = str(e)
+                delivered = False
+
+        if delivered:
+            self.write({
+                "whatsapp_sent": True,
+                "whatsapp_last_sent": fields.Datetime.now(),
+            })
+
+        return {
+            "success": True if (delivered or not send_immediate or not send_error) else False,
+            "message": "Pesan berhasil dikirim" if delivered else (f"Pesan diantrekan: {send_error}" if send_error else "Pesan berhasil masuk antrean"),
+            "outbox_id": outbox.id,
+            "phone": normalized_phone,
+            "is_delivered": delivered,
+            "template_used": template_type,
+        }
+
+    def _auto_notify_order_ready(self):
+        """
+        Otomasi pengiriman notifikasi WhatsApp saat pesanan menjadi 'ready' (Event 2).
+        """
+        auto_send_param = self.env["ir.config_parameter"].sudo()
+        auto_send_enabled = True
+        if hasattr(auto_send_param, "get_bool"):
+            auto_send_enabled = auto_send_param.get_bool("laundry.auto_send_whatsapp_on_ready", default=True)
+        elif hasattr(auto_send_param, "get_param"):
+            val = auto_send_param.get_param("laundry.auto_send_whatsapp_on_ready", "True")
+            auto_send_enabled = str(val).lower() in ("true", "1", "t", "yes")
+
+        skip_notification = self.env.context.get("skip_whatsapp_notification", False)
+        if not auto_send_enabled or skip_notification:
+            return
+
+        import logging
+        _logger = logging.getLogger(__name__)
+
+        for order in self:
+            if order.whatsapp_phone or order._get_partner_phone():
+                try:
+                    order.action_send_whatsapp_notification(template_type="ready", send_immediate=True)
+                except Exception as e:
+                    _logger.warning("Gagal mengirimkan notifikasi WhatsApp otomatis saat order %s ready: %s", order.name, e)
 
     # -------------------------------------------------------------------------
     # Konfigurasi Same Day Service (Ketentuan 3, 7, 8)
@@ -288,10 +506,40 @@ class LaundryOrder(models.Model):
             if "total_amount" in vals and ("line_ids" in vals or vals.get("line_ids")):
                 vals.pop("total_amount", None)
 
+            # Auto-populate whatsapp_phone dari partner jika belum diisi
+            if vals.get("partner_id") and not vals.get("whatsapp_phone"):
+                partner = self.env["res.partner"].browse(vals["partner_id"])
+                raw_phone = getattr(partner, "mobile", None) or getattr(partner, "phone", None) or ""
+                if raw_phone:
+                    from ..utils.phone_utils import normalize_phone_number
+                    vals["whatsapp_phone"] = normalize_phone_number(raw_phone)
+
         orders = super().create(vals_list)
         for order in orders:
             order._compute_weight()
             order._compute_total_amount()
+
+        # Otomasi pengiriman WhatsApp saat pesanan baru dibuat (Event 1)
+        auto_send_param = self.env["ir.config_parameter"].sudo()
+        auto_send_enabled = True
+        if hasattr(auto_send_param, "get_bool"):
+            auto_send_enabled = auto_send_param.get_bool("laundry.auto_send_whatsapp_on_create", default=True)
+        elif hasattr(auto_send_param, "get_param"):
+            val = auto_send_param.get_param("laundry.auto_send_whatsapp_on_create", "True")
+            auto_send_enabled = str(val).lower() in ("true", "1", "t", "yes")
+
+        skip_notification = self.env.context.get("skip_whatsapp_notification", False)
+
+        if auto_send_enabled and not skip_notification:
+            import logging
+            _logger = logging.getLogger(__name__)
+            for order in orders:
+                if order.whatsapp_phone or order._get_partner_phone():
+                    try:
+                        order.action_send_whatsapp_notification(template_type="invoice", send_immediate=True)
+                    except Exception as e:
+                        _logger.warning("Gagal mengirimkan notifikasi WhatsApp otomatis saat pembuatan order %s: %s", order.name, e)
+
         return orders
 
     def write(self, vals):
@@ -314,10 +562,22 @@ class LaundryOrder(models.Model):
                 if "service_speed_fee" not in vals:
                     vals["service_speed_fee"] = 0.0
 
+        orders_to_notify_ready = self.env["laundry.order"]
+        if "state" in vals:
+            new_state = vals.get("state")
+            for order in self:
+                order._check_state_transition(new_state)
+            if new_state == "ready":
+                orders_to_notify_ready = self.filtered(lambda o: o.state != "ready")
+
         res = super().write(vals)
         if "service_speed" in vals or "service_speed_fee" in vals:
             for order in self:
                 order._compute_total_amount()
+
+        if orders_to_notify_ready:
+            orders_to_notify_ready._auto_notify_order_ready()
+
         return res
 
     def recompute_prices(self):
@@ -329,6 +589,245 @@ class LaundryOrder(models.Model):
             order.line_ids._compute_subtotal()
             order._compute_weight()
             order._compute_total_amount()
+        return True
+
+    # -------------------------------------------------------------------------
+    # Alur Kerja & Transisi Status Pesanan (Order Workflow - Task 1)
+    # -------------------------------------------------------------------------
+    def _get_process_pipeline(self):
+        """
+        Menentukan tahapan proses wajib untuk pesanan ini berdasarkan layanan yang dipesan.
+        Mengembalikan daftar tahapan di antara 'received' dan 'ready'.
+
+        Aturan Bisnis:
+        - Setrika Saja: ['ironing'] (tidak boleh dipaksa washing dan drying)
+        - Cuci Lipat: ['washing', 'drying'] (tidak perlu ironing)
+        - Cuci Setrika / Cuci Standar: ['washing', 'drying', 'ironing']
+        - Karpet / Bantal / Guling: ['washing', 'drying'] (tidak perlu ironing)
+        - Campuran: Menggabungkan seluruh tahapan wajib dari setiap item
+        """
+        self.ensure_one()
+        if self.line_ids:
+            needs_washing = False
+            needs_ironing = False
+
+            for line in self.line_ids:
+                prod_name = (line.product_template_id.name or "").strip().lower()
+
+                # Setrika Saja: hanya setrika (tidak cuci)
+                is_iron_only = ("setrika" in prod_name or "iron" in prod_name) and not any(
+                    w in prod_name for w in ["cuci", "wash", "clean"]
+                )
+
+                # Layanan tanpa setrika: cuci lipat, karpet, bantal, guling
+                is_no_iron = (
+                    "cuci lipat" in prod_name or
+                    "lipat" in prod_name or
+                    "karpet" in prod_name or
+                    "carpet" in prod_name or
+                    "bantal" in prod_name or
+                    "guling" in prod_name
+                )
+
+                if is_iron_only:
+                    needs_ironing = True
+                elif is_no_iron:
+                    needs_washing = True
+                else:
+                    # Cuci setrika, cuci kiloan, cuci satuan, dry cleaning, sprei, bed cover, selimut
+                    needs_washing = True
+                    needs_ironing = True
+
+            stages = []
+            if needs_washing:
+                stages.append("washing")
+                stages.append("drying")  # setiap yang dicuci wajib dikeringkan
+            if needs_ironing:
+                stages.append("ironing")
+            return stages if stages else ["washing", "drying", "ironing"]
+
+        # Kompatibilitas mundur pesanan lama (legacy tanpa line_ids)
+        service_type = self.service_type or "wash_iron"
+        if service_type == "iron":
+            return ["ironing"]
+        elif service_type == "wash_fold":
+            return ["washing", "drying"]
+        else:
+            return ["washing", "drying", "ironing"]
+
+    def _check_state_transition(self, new_state):
+        """
+        Memvalidasi apakah transisi dari self.state ke new_state sah sesuai
+        aturan workflow, jenis layanan, dan metode penyerahan (pickup vs delivery).
+        """
+        self.ensure_one()
+        current_state = self.state
+
+        # Pesanan cancelled tidak boleh diproses kembali tanpa aturan bisnis yang jelas
+        if current_state == "cancelled":
+            raise ValidationError(
+                _("Pesanan '%(name)s' sudah dalam status dibatalkan dan tidak dapat diproses kembali.", name=self.name)
+            )
+
+        # Pesanan completed tidak dapat diubah statusnya
+        if current_state == "completed":
+            raise ValidationError(
+                _("Pesanan '%(name)s' sudah selesai (completed) dan tidak dapat diubah statusnya.", name=self.name)
+            )
+
+        # Jika status sama, tidak ada perubahan
+        if current_state == new_state:
+            return True
+
+        # Pembatalan diizinkan dari status apapun selama belum selesai atau dibatalkan
+        if new_state == "cancelled":
+            return True
+
+        pipeline = self._get_process_pipeline()
+        delivery = self.delivery_type or "pickup"
+
+        if new_state == "washing":
+            if "washing" not in pipeline:
+                raise ValidationError(
+                    _("Layanan pada pesanan '%(name)s' (misal: Setrika Saja) tidak memerlukan tahapan pencucian (washing).",
+                      name=self.name)
+                )
+            if current_state != "received":
+                raise ValidationError(
+                    _("Pesanan '%(name)s' hanya dapat dipindahkan ke status 'Sedang Dicuci' (washing) dari status 'Diterima' (received). Status saat ini: '%(cur)s'.",
+                      name=self.name, cur=current_state)
+                )
+
+        elif new_state == "drying":
+            if "drying" not in pipeline:
+                raise ValidationError(
+                    _("Layanan pada pesanan '%(name)s' tidak memerlukan tahapan pengeringan (drying).", name=self.name)
+                )
+            if current_state != "washing":
+                if current_state == "received":
+                    raise ValidationError(
+                        _("Pesanan '%(name)s' tidak boleh melompati tahapan wajib: harus melalui proses pencucian (washing) terlebih dahulu sebelum dikeringkan.",
+                          name=self.name)
+                    )
+                raise ValidationError(
+                    _("Pesanan '%(name)s' hanya dapat dipindahkan ke status 'Sedang Dikeringkan' (drying) dari status 'Sedang Dicuci' (washing). Status saat ini: '%(cur)s'.",
+                      name=self.name, cur=current_state)
+                )
+
+        elif new_state == "ironing":
+            if "ironing" not in pipeline:
+                raise ValidationError(
+                    _("Layanan pada pesanan '%(name)s' (misal: Cuci Lipat) tidak memerlukan tahapan penyetrikaan (ironing).",
+                      name=self.name)
+                )
+            expected_prev = "drying" if "drying" in pipeline else "received"
+            if current_state != expected_prev:
+                if expected_prev == "drying":
+                    raise ValidationError(
+                        _("Pesanan '%(name)s' tidak boleh melompati tahapan wajib: harus melalui proses pencucian dan pengeringan sebelum disetrika. Status saat ini: '%(cur)s'.",
+                          name=self.name, cur=current_state)
+                    )
+                else:
+                    raise ValidationError(
+                        _("Pesanan Setrika Saja '%(name)s' hanya dapat disetrika langsung dari status 'Diterima' (received). Status saat ini: '%(cur)s'.",
+                          name=self.name, cur=current_state)
+                    )
+
+        elif new_state == "ready":
+            last_stage = pipeline[-1] if pipeline else "received"
+            if current_state != last_stage:
+                stage_labels = {
+                    "washing": "Pencucian (washing)",
+                    "drying": "Pengeringan (drying)",
+                    "ironing": "Penyetrikaan (ironing)",
+                    "received": "Diterima (received)",
+                }
+                expected_label = stage_labels.get(last_stage, last_stage)
+                raise ValidationError(
+                    _("Pesanan '%(name)s' tidak boleh melompati tahapan wajib: harus menyelesaikan tahapan %(stage)s terlebih dahulu sebelum siap diambil/dikirim. Status saat ini: '%(cur)s'.",
+                      name=self.name, stage=expected_label, cur=current_state)
+                )
+
+        elif new_state == "out_for_delivery":
+            if delivery != "delivery":
+                raise ValidationError(
+                    _("Pesanan '%(name)s' menggunakan metode ambil sendiri di tempat (pickup), sehingga tidak melalui proses pengiriman kurir (out_for_delivery).",
+                      name=self.name)
+                )
+            if current_state != "ready":
+                raise ValidationError(
+                    _("Pesanan '%(name)s' harus berstatus 'Siap Diambil / Siap Kirim' (ready) sebelum dapat dikirimkan ke pelanggan. Status saat ini: '%(cur)s'.",
+                      name=self.name, cur=current_state)
+                )
+
+        elif new_state == "completed":
+            if delivery == "delivery":
+                if current_state != "out_for_delivery":
+                    if current_state == "ready":
+                        raise ValidationError(
+                            _("Pesanan antar (delivery) '%(name)s' tidak boleh langsung diselesaikan: harus melewati status 'Dalam Pengiriman' (out_for_delivery) sebelum 'Selesai' (completed).",
+                              name=self.name)
+                        )
+                    raise ValidationError(
+                        _("Pesanan antar (delivery) '%(name)s' hanya dapat diselesaikan setelah melalui proses pengiriman (out_for_delivery). Status saat ini: '%(cur)s'.",
+                          name=self.name, cur=current_state)
+                    )
+            else:
+                if current_state != "ready":
+                    raise ValidationError(
+                        _("Pesanan ambil di tempat (pickup) '%(name)s' harus berstatus 'Siap Diambil' (ready) sebelum dapat diselesaikan. Status saat ini: '%(cur)s'.",
+                          name=self.name, cur=current_state)
+                    )
+
+        return True
+
+    def action_washing(self):
+        """Memindahkan pesanan ke proses pencucian (washing)."""
+        for order in self:
+            order._check_state_transition("washing")
+            order.state = "washing"
+        return True
+
+    def action_drying(self):
+        """Memindahkan pesanan ke proses pengeringan (drying)."""
+        for order in self:
+            order._check_state_transition("drying")
+            order.state = "drying"
+        return True
+
+    def action_ironing(self):
+        """Memindahkan pesanan ke proses penyetrikaan (ironing)."""
+        for order in self:
+            order._check_state_transition("ironing")
+            order.state = "ironing"
+        return True
+
+    def action_ready(self):
+        """Menandai pesanan telah selesai dikerjakan dan siap diambil atau dikirim."""
+        for order in self:
+            order._check_state_transition("ready")
+            order.write({"state": "ready"})
+        return True
+
+    def action_out_for_delivery(self):
+        """Memindahkan pesanan layanan delivery ke status dalam pengiriman kurir."""
+        for order in self:
+            order._check_state_transition("out_for_delivery")
+            order.state = "out_for_delivery"
+        return True
+
+    def action_complete(self):
+        """Menyelesaikan transaksi pesanan laundry (pakaian telah diterima pelanggan)."""
+        for order in self:
+            order._check_state_transition("completed")
+            order.state = "completed"
+        return True
+
+    def action_cancel(self):
+        """Membatalkan pesanan laundry."""
+        for order in self:
+            order._check_state_transition("cancelled")
+            order.state = "cancelled"
         return True
 
 
