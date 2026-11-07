@@ -770,6 +770,163 @@ class OrderApiController(BaseApiController):
 
     @http.route(
         [
+            '/api/orders/<int:order_id>/delivery',
+            '/api/laundry/orders/<int:order_id>/delivery',
+        ],
+        type='http',
+        auth='public',
+        methods=['PATCH', 'PUT', 'OPTIONS'],
+        csrf=False,
+    )
+    def update_order_delivery(self, order_id, **kwargs):
+        """
+        PATCH /api/orders/<int:order_id>/delivery
+        Endpoint untuk memperbarui opsi pengantaran / pengambilan (fulfillment) pesanan:
+        - delivery_type: 'pickup' | 'delivery'
+        - delivery_address: Alamat tujuan pengantaran
+        - delivery_fee: Biaya ongkos kirim (otomatis update total_amount & amount_due)
+        - notes: Catatan khusus pengantaran (opsional)
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return self._json_response({'status': 'ok'})
+
+        try:
+            # 1. Autentikasi
+            user = self._get_authenticated_user(request, session_store_fn=session_store)
+            if not user:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Autentikasi diperlukan. Akses tidak diizinkan.',
+                }, status=401)
+
+            # 2. Otorisasi (Internal users / Staf Kasir / Admin)
+            if user.has_group('base.group_portal') or not user.has_group('base.group_user'):
+                return self._json_response({
+                    'success': False,
+                    'message': 'Akses ditolak: Hanya kasir atau staf internal yang berwenang memperbarui pengantaran.',
+                }, status=403)
+
+            # 3. Parse JSON Body
+            try:
+                raw_data = request.httprequest.data
+                body = json.loads(raw_data.decode('utf-8')) if raw_data else {}
+            except Exception:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Format payload JSON tidak valid.',
+                }, status=400)
+
+            # 4. Ambil order dengan row-level lock
+            request.env.cr.execute("SELECT id FROM laundry_order WHERE id = %s FOR UPDATE", [order_id])
+            order = request.env['laundry.order'].with_user(user).browse(order_id)
+            if not order.exists():
+                return self._json_response({
+                    'success': False,
+                    'message': f"Pesanan dengan ID {order_id} tidak ditemukan.",
+                }, status=404)
+
+            # 5. Cek status order
+            if order.state in ['completed', 'cancelled']:
+                return self._json_response({
+                    'success': False,
+                    'message': f"Pengantaran tidak dapat diubah karena pesanan sudah berstatus '{order.state}'.",
+                }, status=400)
+
+            vals_to_update = {}
+
+            # delivery_type
+            delivery_type_input = body.get('delivery_type') or body.get('fulfillment')
+            if delivery_type_input is not None:
+                dt = str(delivery_type_input).strip().lower()
+                if dt not in ['pickup', 'delivery']:
+                    return self._json_response({
+                        'success': False,
+                        'message': "delivery_type harus bernilai 'pickup' atau 'delivery'.",
+                    }, status=400)
+
+                if order.state == 'out_for_delivery' and dt == 'pickup':
+                    return self._json_response({
+                        'success': False,
+                        'message': "Pesanan sedang dalam proses pengantaran (out_for_delivery), tidak dapat diubah ke pickup.",
+                    }, status=400)
+
+                vals_to_update['delivery_type'] = dt
+                if dt == 'pickup' and 'delivery_fee' not in body:
+                    vals_to_update['delivery_fee'] = 0.0
+
+            # delivery_address
+            if 'delivery_address' in body:
+                vals_to_update['delivery_address'] = str(body['delivery_address'] or '').strip()
+            elif delivery_type_input == 'delivery' and not order.delivery_address:
+                partner_addr = order.partner_id.contact_address or ''
+                if partner_addr:
+                    vals_to_update['delivery_address'] = partner_addr
+
+            # delivery_fee
+            if 'delivery_fee' in body:
+                try:
+                    fee = max(0.0, float(body['delivery_fee'] or 0.0))
+                    vals_to_update['delivery_fee'] = fee
+                except (ValueError, TypeError):
+                    return self._json_response({
+                        'success': False,
+                        'message': "Nominal 'delivery_fee' harus berupa angka yang valid.",
+                    }, status=400)
+
+            # notes
+            if 'notes' in body and body['notes'] is not None:
+                vals_to_update['notes'] = body['notes']
+
+            if not vals_to_update:
+                return self._json_response({
+                    'success': False,
+                    'message': "Tidak ada data perubahan pengantaran yang diberikan.",
+                }, status=400)
+
+            order.write(vals_to_update)
+
+            stages, next_status = self._compute_order_stages_and_next(order)
+            partner_phone = getattr(order.partner_id, 'phone', None) or getattr(order.partner_id, 'mobile', None) or order.whatsapp_phone or ''
+            partner_address = order.partner_id.contact_address or ''
+            delivery_address = getattr(order, 'delivery_address', None) or partner_address
+
+            return self._json_response({
+                'success': True,
+                'message': 'Informasi pengantaran pesanan berhasil diperbarui.',
+                'data': {
+                    'id': order.id,
+                    'order_number': order.name,
+                    'delivery_type': getattr(order, 'delivery_type', 'pickup') or 'pickup',
+                    'delivery_address': delivery_address,
+                    'delivery_fee': float(getattr(order, 'delivery_fee', 0.0) or 0.0),
+                    'total_amount': float(order.total_amount or 0.0),
+                    'amount_paid': float(getattr(order, 'amount_paid', 0.0) or 0.0),
+                    'amount_due': float(getattr(order, 'amount_due', 0.0) or 0.0),
+                    'state': order.state,
+                    'stages': stages,
+                    'next_status': next_status,
+                }
+            }, status=200)
+
+        except (ValidationError, UserError) as ve:
+            return self._json_response({
+                'success': False,
+                'message': str(ve),
+            }, status=400)
+        except AccessError:
+            return self._json_response({
+                'success': False,
+                'message': 'Akses ditolak: Anda tidak memiliki izin untuk mengubah pesanan ini.',
+            }, status=403)
+        except Exception as e:
+            _logger.exception("Error in update_order_delivery: %s", str(e))
+            return self._json_response({
+                'success': False,
+                'message': 'Terjadi kesalahan pada server saat memperbarui pengantaran pesanan.',
+            }, status=500)
+
+    @http.route(
+        [
             '/api/orders/<int:order_id>/send-whatsapp',
             '/api/laundry/orders/<int:order_id>/send-whatsapp',
         ],

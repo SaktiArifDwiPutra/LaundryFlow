@@ -381,3 +381,61 @@ class TestOrderStatusApi(TransactionCase):
             res_data = json.loads(resp.data.decode("utf-8"))
             self.assertEqual(res_data["data"]["current_status"], "cancelled")
             self.assertIsNone(res_data["data"]["next_status"])
+
+    def test_15_update_order_delivery_success(self):
+        """15. Update delivery dari pickup ke delivery berhasil memperbarui alamat, ongkir, total, dan tahapan."""
+        order = self.env["laundry.order"].create({
+            "partner_id": self.partner_customer.id,
+            "delivery_type": "pickup",
+            "delivery_fee": 0.0,
+            "line_ids": [(0, 0, {
+                "product_template_id": self.srv_cuci_setrika.id,
+                "quantity": 2.0,
+            })]
+        })
+        base_total = order.total_amount
+        mock_req = self._mock_request(user=self.admin_user, data={
+            "delivery_type": "delivery",
+            "delivery_address": "Jl. Mawar No. 10, Jakarta Selatan",
+            "delivery_fee": 15000.0,
+            "notes": "Tolong diantar sore",
+        })
+        with patch("odoo.addons.laundryflow_backend.controllers.order_controller.request", mock_req), patch.object(self.controller, "_get_authenticated_user", return_value=self.admin_user):
+            resp = self.controller.update_order_delivery(order.id)
+            self.assertEqual(resp.status_code, 200)
+            res_data = json.loads(resp.data.decode("utf-8"))
+            self.assertTrue(res_data.get("success"))
+            data = res_data["data"]
+            self.assertEqual(data["delivery_type"], "delivery")
+            self.assertEqual(data["delivery_address"], "Jl. Mawar No. 10, Jakarta Selatan")
+            self.assertEqual(data["delivery_fee"], 15000.0)
+            self.assertEqual(data["total_amount"], base_total + 15000.0)
+            self.assertIn("out_for_delivery", data["stages"])
+
+    def test_16_update_order_delivery_portal_forbidden(self):
+        """16. Pelanggan portal dilarang mengakses update delivery (HTTP 403)."""
+        order = self.env["laundry.order"].create({
+            "partner_id": self.partner_customer.id,
+            "line_ids": [(0, 0, {
+                "product_template_id": self.srv_cuci_setrika.id,
+                "quantity": 1.0,
+            })]
+        })
+        mock_req = self._mock_request(user=self.portal_user, data={"delivery_type": "delivery"})
+        with patch("odoo.addons.laundryflow_backend.controllers.order_controller.request", mock_req), patch.object(self.controller, "_get_authenticated_user", return_value=self.portal_user):
+            resp = self.controller.update_order_delivery(order.id)
+            self.assertEqual(resp.status_code, 403)
+
+    def test_17_update_order_delivery_invalid_type(self):
+        """17. delivery_type tidak valid menghasilkan HTTP 400."""
+        order = self.env["laundry.order"].create({
+            "partner_id": self.partner_customer.id,
+            "line_ids": [(0, 0, {
+                "product_template_id": self.srv_cuci_setrika.id,
+                "quantity": 1.0,
+            })]
+        })
+        mock_req = self._mock_request(user=self.admin_user, data={"delivery_type": "drone_delivery"})
+        with patch("odoo.addons.laundryflow_backend.controllers.order_controller.request", mock_req), patch.object(self.controller, "_get_authenticated_user", return_value=self.admin_user):
+            resp = self.controller.update_order_delivery(order.id)
+            self.assertEqual(resp.status_code, 400)

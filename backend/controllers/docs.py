@@ -987,6 +987,101 @@ class ApiDocsController(http.Controller):
                         }
                     }
                 },
+                "/api/laundry/orders/{order_id}/delivery": {
+                    "patch": {
+                        "tags": ["Orders"],
+                        "summary": "Perbarui Opsi Pengantaran / Pengambilan Pesanan",
+                        "operationId": "updateOrderDelivery",
+                        "description": (
+                            "Memperbarui metode pemenuhan pesanan (pickup vs delivery), alamat pengantaran, dan biaya ongkir.\n\n"
+                            "**Fitur & Perilaku:**\n"
+                            "- Mendukung pengubahan `delivery_type` dari `pickup` ke `delivery` atau sebaliknya.\n"
+                            "- Bila beralih ke `delivery`, pipeline tahapan (`stages`) otomatis menyisipkan tahap `out_for_delivery` sebelum `completed`.\n"
+                            "- Perubahan `delivery_fee` akan secara otomatis memperbarui `total_amount` dan sisa tagihan `amount_due`.\n"
+                            "- Hanya kasir / staf internal yang berwenang mengubah informasi ini.\n"
+                            "- Pesanan yang sudah `completed` atau `cancelled` tidak dapat diubah.\n\n"
+                            "**Route Alias:**\n"
+                            "- `PATCH /api/laundry/orders/{order_id}/delivery`\n"
+                            "- `PATCH /api/orders/{order_id}/delivery`"
+                        ),
+                        "security": [{"BearerAuth": []}, {"SessionHeaderAuth": []}],
+                        "parameters": [
+                            {"name": "order_id", "in": "path", "required": True, "description": "ID unik transaksi pesanan laundry.", "schema": {"type": "integer"}, "example": 123}
+                        ],
+                        "requestBody": {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "delivery_type": {
+                                                "type": "string",
+                                                "enum": ["pickup", "delivery"],
+                                                "description": "Metode penyerahan cucian (pickup = ambil sendiri, delivery = antar kurir).",
+                                                "example": "delivery"
+                                            },
+                                            "delivery_address": {
+                                                "type": "string",
+                                                "description": "Alamat tujuan pengantaran.",
+                                                "example": "Jl. Mawar No. 10, Jakarta Selatan"
+                                            },
+                                            "delivery_fee": {
+                                                "type": "number",
+                                                "description": "Biaya ongkos kirim.",
+                                                "example": 10000.0
+                                            },
+                                            "notes": {
+                                                "type": "string",
+                                                "description": "Catatan pengantaran.",
+                                                "example": "Diantar sore jam 4"
+                                            }
+                                        }
+                                    },
+                                    "example": {
+                                        "delivery_type": "delivery",
+                                        "delivery_address": "Jl. Mawar No. 10, Jakarta Selatan",
+                                        "delivery_fee": 10000.0,
+                                        "notes": "Diantar sore jam 4"
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "200": {
+                                "description": "Informasi pengantaran pesanan berhasil diperbarui.",
+                                "content": {
+                                    "application/json": {
+                                        "example": {
+                                            "success": True,
+                                            "message": "Informasi pengantaran pesanan berhasil diperbarui.",
+                                            "data": {
+                                                "id": 123,
+                                                "order_number": "LND/2026/0001",
+                                                "delivery_type": "delivery",
+                                                "delivery_address": "Jl. Mawar No. 10, Jakarta Selatan",
+                                                "delivery_fee": 10000.0,
+                                                "total_amount": 45000.0,
+                                                "amount_paid": 0.0,
+                                                "amount_due": 45000.0,
+                                                "state": "ready",
+                                                "stages": ["received", "washing", "drying", "ironing", "ready", "out_for_delivery", "completed"],
+                                                "next_status": "out_for_delivery"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "400": {
+                                "description": "Parameter tidak valid atau pesanan sudah selesai/dibatalkan.",
+                                "content": {"application/json": {"example": {"success": False, "message": "delivery_type harus bernilai 'pickup' atau 'delivery'."}}}
+                            },
+                            "401": {"$ref": "#/components/responses/UnauthorizedError"},
+                            "403": {"description": "Akses ditolak (hanya staf internal/kasir)."},
+                            "404": {"description": "Pesanan tidak ditemukan."}
+                        }
+                    }
+                },
                 "/api/laundry/orders/{order_id}/send-whatsapp": {
                     "post": {
                         "tags": ["Orders"],
