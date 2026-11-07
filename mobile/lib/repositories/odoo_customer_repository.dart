@@ -10,18 +10,17 @@ class OdooCustomerRepository implements CustomerRepository {
   @override
   Future<List<Customer>> list({String q = ''}) async {
     final query = q.trim();
+    if (query.isEmpty) {
+      return const [];
+    }
     final Map<String, dynamic> json;
     try {
-      final queryParams = <String, String>{'limit': '50'};
-      if (query.isNotEmpty) {
-        queryParams['q'] = query;
-      }
       json = await _api.get(
         '/api/laundry/customers/search',
-        query: queryParams,
+        query: {'q': query, 'limit': '50'},
       );
     } on ApiException catch (e) {
-      if (e.statusCode == 404) return const [];
+      if (e.statusCode == 404 || e.statusCode == 400) return const [];
       rethrow;
     }
     final data = json['data'] as List<dynamic>? ?? const [];

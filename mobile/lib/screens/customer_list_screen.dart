@@ -149,6 +149,30 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                 }
                 final customers = snapshot.data!;
                 if (customers.isEmpty) {
+                  if (_search.text.trim().isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.person_search,
+                            size: 64,
+                            color: Theme.of(context).colorScheme.outline,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Cari Pelanggan',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Ketik nama atau nomor HP pelanggan untuk mencari.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    );
+                  }
                   return const Center(
                     child: Text('Pelanggan tidak ditemukan.'),
                   );
