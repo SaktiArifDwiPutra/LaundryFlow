@@ -394,9 +394,12 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
 
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Pesanan Baru')),
-      body: FutureBuilder<_FormData>(
+      body: SafeArea(
+        child: FutureBuilder<_FormData>(
         future: _dataFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
@@ -435,7 +438,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
           }
 
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 32 + bottomInset),
             children: [
               Text('Pelanggan', style: textTheme.titleMedium),
               const SizedBox(height: 8),
@@ -527,15 +530,20 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                 ),
               ],
               const SizedBox(height: 24),
-              FilledButton(
-                onPressed: _saving ? null : _save,
-                child: Text(_saving ? 'Menyimpan...' : 'Simpan Pesanan'),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: FilledButton(
+                  onPressed: _saving ? null : _save,
+                  child: Text(_saving ? 'Menyimpan...' : 'Simpan Pesanan'),
+                ),
               ),
+              SizedBox(height: 16 + bottomInset),
             ],
           );
         },
       ),
-    );
+    ));
   }
 }
 
