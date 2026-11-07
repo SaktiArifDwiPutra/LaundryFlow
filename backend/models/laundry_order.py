@@ -620,6 +620,14 @@ class LaundryOrder(models.Model):
                     speed=order.service_speed,
                 ))
 
+    @api.constrains("partner_id")
+    def _check_partner_not_internal_staff(self):
+        for order in self:
+            if order.partner_id:
+                users = order.partner_id.sudo().user_ids
+                if users and any(not u.share for u in users):
+                    raise ValidationError(_("Akun staf/admin tidak dapat dipilih sebagai pelanggan pesanan."))
+
     @api.model_create_multi
     def create(self, vals_list):
         sequence = self.env["ir.sequence"]

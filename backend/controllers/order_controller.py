@@ -275,6 +275,13 @@ class OrderApiController(BaseApiController):
                     'message': f'Pelanggan dengan ID {pid} tidak ditemukan.',
                 }, status=404)
 
+            # Validasi partner bukan akun staf internal / admin Odoo
+            if partner.sudo().user_ids and any(not u.share for u in partner.sudo().user_ids):
+                return self._json_response({
+                    'success': False,
+                    'message': 'Akun staf/admin tidak dapat dipilih sebagai pelanggan pesanan.',
+                }, status=400)
+
             # Validasi hak akses portal: pelanggan hanya boleh membuat order untuk dirinya sendiri
             if user.has_group('base.group_portal') and user.partner_id.id != pid:
                 return self._json_response({

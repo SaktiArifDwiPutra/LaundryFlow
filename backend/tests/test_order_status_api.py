@@ -439,3 +439,21 @@ class TestOrderStatusApi(TransactionCase):
         with patch("odoo.addons.laundryflow_backend.controllers.order_controller.request", mock_req), patch.object(self.controller, "_get_authenticated_user", return_value=self.admin_user):
             resp = self.controller.update_order_delivery(order.id)
             self.assertEqual(resp.status_code, 400)
+
+    def test_18_reject_internal_staff_as_order_partner(self):
+        """18. Validasi penolakan staf internal/admin sebagai pelanggan pesanan (HTTP 400)."""
+        admin_partner_id = self.admin_user.partner_id.id
+        payload = {
+            "partner_id": admin_partner_id,
+            "lines": [{
+                "product_template_id": self.srv_cuci_setrika.id,
+                "quantity": 1.0,
+            }]
+        }
+        mock_req = self._mock_request(user=self.admin_user, data=payload)
+        with patch("odoo.addons.laundryflow_backend.controllers.order_controller.request", mock_req), patch.object(self.controller, "_get_authenticated_user", return_value=self.admin_user):
+            resp = self.controller.create_order()
+            self.assertEqual(resp.status_code, 400)
+            res_data = json.loads(resp.data.decode("utf-8"))
+            self.assertFalse(res_data.get("success"))
+            self.assertEqual(res_data.get("message"), "Akun staf/admin tidak dapat dipilih sebagai pelanggan pesanan.")

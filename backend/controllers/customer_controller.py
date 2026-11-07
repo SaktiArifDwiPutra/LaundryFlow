@@ -115,7 +115,11 @@ class CustomerApiController(BaseApiController):
 
         Partner = request.env['res.partner'].with_user(user)
         candidates = Partner.search_read(
-            domain=[('active', '=', True), ('phone', '!=', False)],
+            domain=[
+                ('active', '=', True),
+                ('phone', '!=', False),
+                '|', ('user_ids', '=', False), ('user_ids.share', '=', True),
+            ],
             fields=['id', 'name', 'phone', 'email', 'street', 'city'],
             order='id asc',
         )
@@ -187,9 +191,12 @@ class CustomerApiController(BaseApiController):
                         'message': 'Parameter limit harus berupa angka yang valid'
                     }, status=400)
 
-            # 5. Domain Pencarian (berdasarkan Nama atau Nomor Telepon)
+            # 5. Domain Pencarian (Hanya pelanggan murni, mengecualikan akun staf internal/admin)
             domain = [
                 ('active', '=', True),
+                '|',
+                ('user_ids', '=', False),
+                ('user_ids.share', '=', True),
                 '|',
                 ('name', 'ilike', q),
                 ('phone', 'ilike', q),
@@ -368,9 +375,8 @@ class CustomerApiController(BaseApiController):
                 'phone': phone,
                 'active': True,
                 'is_company': False,
+                'customer_rank': 1,
             }
-            if 'customer_rank' in Partner._fields:
-                vals['customer_rank'] = 1
             if street:
                 vals['street'] = street
             if email:
