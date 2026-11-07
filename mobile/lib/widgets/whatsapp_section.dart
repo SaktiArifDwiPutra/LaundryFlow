@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/order.dart';
 import '../models/whatsapp.dart';
 import '../repositories/repositories.dart';
+import '../theme/app_colors.dart';
 
 class WhatsAppSection extends StatefulWidget {
   const WhatsAppSection({super.key, required this.order});
@@ -41,9 +42,9 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
           return AlertDialog(
             title: const Row(
               children: [
-                Icon(Icons.chat, color: Colors.green),
+                Icon(Icons.chat, color: AppColors.success),
                 SizedBox(width: 8),
-                Text('Kirim WhatsApp'),
+                Text('Kirim Notifikasi WhatsApp'),
               ],
             ),
             content: SingleChildScrollView(
@@ -54,21 +55,20 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
                   DropdownButtonFormField<String>(
                     value: selectedTemplate,
                     decoration: const InputDecoration(
-                      labelText: 'Pilih Template',
-                      border: OutlineInputBorder(),
+                      labelText: 'Pilih Template Pesan',
                     ),
                     items: const [
                       DropdownMenuItem(
                         value: 'invoice',
-                        child: Text('Nota / Invoice'),
+                        child: Text('Nota / Faktur Digital'),
                       ),
                       DropdownMenuItem(
                         value: 'ready',
-                        child: Text('Pesanan Siap Diambil'),
+                        child: Text('Cucian Siap Diambil / Diantar'),
                       ),
                       DropdownMenuItem(
                         value: 'reminder',
-                        child: Text('Pengingat Pesanan'),
+                        child: Text('Pengingat Cucian'),
                       ),
                       DropdownMenuItem(
                         value: 'custom',
@@ -87,7 +87,7 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
                     keyboardType: TextInputType.phone,
                     decoration: const InputDecoration(
                       labelText: 'Nomor WhatsApp Penerima',
-                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.phone_outlined, size: 20),
                     ),
                   ),
                   if (selectedTemplate == 'custom') ...[
@@ -97,13 +97,13 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
                       maxLines: 3,
                       decoration: const InputDecoration(
                         labelText: 'Isi Pesan Kustom',
-                        border: OutlineInputBorder(),
+                        hintText: 'Tulis pesan langsung untuk pelanggan...',
                       ),
                     ),
                   ],
                   const SizedBox(height: 16),
                   OutlinedButton.icon(
-                    icon: const Icon(Icons.visibility),
+                    icon: const Icon(Icons.visibility, size: 18),
                     label: const Text('Pratinjau Pesan (Preview)'),
                     onPressed: () async {
                       try {
@@ -121,9 +121,19 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
                         showDialog(
                           context: ctx,
                           builder: (_) => AlertDialog(
-                            title: const Text('Pratinjau WhatsApp'),
+                            title: const Text('Pratinjau Pesan'),
                             content: SingleChildScrollView(
-                              child: SelectableText(preview.message),
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.successLight.withValues(alpha: 0.5),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: SelectableText(
+                                  preview.message,
+                                  style: const TextStyle(fontSize: 13, height: 1.4),
+                                ),
+                              ),
                             ),
                             actions: [
                               TextButton(
@@ -136,7 +146,7 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
                       } catch (e) {
                         if (!ctx.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Gagal pratinjau: $e')),
+                          SnackBar(content: Text('Gagal membuat pratinjau: $e')),
                         );
                       }
                     },
@@ -150,8 +160,9 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
                 child: const Text('Batal'),
               ),
               FilledButton.icon(
-                icon: const Icon(Icons.send),
-                label: const Text('Kirim Sekarang'),
+                style: FilledButton.styleFrom(backgroundColor: AppColors.success),
+                icon: const Icon(Icons.send, size: 18),
+                label: const Text('Kirim WhatsApp'),
                 onPressed: () => Navigator.of(ctx).pop(true),
               ),
             ],
@@ -177,7 +188,7 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Notifikasi WhatsApp berhasil diproses.')),
+        const SnackBar(content: Text('Pesan WhatsApp berhasil dikirim ke server Odoo.')),
       );
       _reload();
     } catch (e) {
@@ -199,7 +210,7 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Notifikasi WhatsApp',
+              'Notifikasi WhatsApp Pelanggan',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             if (_sending)
@@ -219,57 +230,72 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
             final hasSent = status?.isSent == true || isDelivered;
 
             return Card(
-              margin: EdgeInsets.zero,
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        Icon(
-                          Icons.chat_bubble_outline,
-                          size: 20,
-                          color: hasSent ? Colors.green : Colors.grey,
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: (hasSent ? AppColors.success : AppColors.neutral)
+                                .withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.chat_bubble_outline,
+                            size: 18,
+                            color: hasSent ? AppColors.success : AppColors.neutral,
+                          ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 12),
                         Expanded(
-                          child: Text(
-                            hasSent
-                                ? 'Terkirim ke ${status?.phone ?? widget.order.customer.phone}'
-                                : 'Belum ada notifikasi WhatsApp terkirim',
-                            style: Theme.of(context).textTheme.bodyMedium,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                hasSent
+                                    ? 'Notifikasi Terkirim'
+                                    : 'Belum Ada Notifikasi Terkirim',
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                              ),
+                              Text(
+                                hasSent
+                                    ? 'Nomor: ${status?.phone ?? widget.order.customer.phone}'
+                                    : 'Pelanggan: ${widget.order.customer.phone.isNotEmpty ? widget.order.customer.phone : 'Belum ada nomor HP'}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: (hasSent ? Colors.green : Colors.grey)
-                                .withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(8),
+                            color: (hasSent ? AppColors.successLight : AppColors.neutralLight),
+                            borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            status?.status.toUpperCase() ?? 'NONE',
+                            hasSent ? 'TERKIRIM' : 'BELUM KIRIM',
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
-                              color: hasSent ? Colors.green : Colors.grey,
+                              color: hasSent ? AppColors.successText : AppColors.neutral,
                             ),
                           ),
                         ),
                       ],
                     ),
                     if (status?.lastSent != null) ...[
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 8),
                       Text(
-                        'Waktu: ${status!.lastSent}',
+                        'Waktu Terakhir: ${status!.lastSent}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
-                    const Divider(height: 20),
+                    const Divider(height: 24),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -278,7 +304,7 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
                           onPressed: _sending
                               ? null
                               : () => _openSendDialog('invoice'),
-                          icon: const Icon(Icons.receipt, size: 16),
+                          icon: const Icon(Icons.receipt_long, size: 16),
                           label: const Text('Kirim Nota'),
                         ),
                         OutlinedButton.icon(
@@ -307,4 +333,3 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
     );
   }
 }
-

@@ -8,6 +8,7 @@ import '../models/service.dart';
 import '../models/service_speed.dart';
 import '../repositories/order_repository.dart';
 import '../repositories/repositories.dart';
+import '../theme/app_colors.dart';
 import '../utils/format.dart';
 import '../widgets/fulfillment_fields.dart';
 import 'customer_list_screen.dart';
@@ -127,6 +128,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       if (_address.text.isEmpty && picked.address.isNotEmpty) {
         _address.text = picked.address;
       }
+      _error = null;
     });
   }
 
@@ -268,8 +270,8 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
           keyboardType: decimal,
           decoration: const InputDecoration(
             labelText: 'Berat (kg)',
-            isDense: true,
-            border: OutlineInputBorder(),
+            hintText: 'Contoh: 3.5',
+            suffixText: 'kg',
           ),
           onChanged: (_) => setState(() {}),
         );
@@ -280,8 +282,8 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           decoration: InputDecoration(
             labelText: 'Jumlah (${service.unit})',
-            isDense: true,
-            border: const OutlineInputBorder(),
+            hintText: 'Contoh: 2',
+            suffixText: service.unit,
           ),
           onChanged: (_) => setState(() {}),
         );
@@ -298,15 +300,14 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                     keyboardType: decimal,
                     decoration: const InputDecoration(
                       labelText: 'Panjang (m)',
-                      isDense: true,
-                      border: OutlineInputBorder(),
+                      suffixText: 'm',
                     ),
                     onChanged: (_) => setState(() {}),
                   ),
                 ),
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Text('×'),
+                  child: Text('×', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ),
                 Expanded(
                   child: TextField(
@@ -314,18 +315,28 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                     keyboardType: decimal,
                     decoration: const InputDecoration(
                       labelText: 'Lebar (m)',
-                      isDense: true,
-                      border: OutlineInputBorder(),
+                      suffixText: 'm',
                     ),
                     onChanged: (_) => setState(() {}),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Luas: ${formatQty(double.parse(area.toStringAsFixed(2)))} m²',
-              style: Theme.of(context).textTheme.bodySmall,
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.primaryContainerLight.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                'Total Luas: ${formatQty(double.parse(area.toStringAsFixed(2)))} m²',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primaryDark,
+                ),
+              ),
             ),
           ],
         );
@@ -333,21 +344,29 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   }
 
   Widget _lineCard(_LineDraft line, List<Service> services) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final qty = _billable(line);
+    final subtotal = (line.service != null && qty > 0)
+        ? (qty * line.service!.unitPrice).round()
+        : 0;
+
     return Card(
       key: ObjectKey(line),
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 4, 12),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Expanded(
-                  child: DropdownButton<Service>(
-                    isExpanded: true,
+                  child: DropdownButtonFormField<Service>(
                     value: line.service,
-                    hint: const Text('Pilih layanan'),
+                    decoration: const InputDecoration(
+                      labelText: 'Pilih Layanan Laundry',
+                    ),
+                    isExpanded: true,
                     items: [
                       for (final s in services)
                         DropdownMenuItem(
@@ -361,28 +380,41 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                     onChanged: (s) => setState(() => line.service = s),
                   ),
                 ),
-                IconButton(
-                  onPressed: _lines.length > 1 ? () => _removeLine(line) : null,
-                  icon: const Icon(Icons.close),
-                ),
+                if (_lines.length > 1) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: () => _removeLine(line),
+                    icon: const Icon(Icons.delete_outline, color: AppColors.danger),
+                    tooltip: 'Hapus Layanan',
+                  ),
+                ],
               ],
             ),
             if (line.service != null) ...[
-              Padding(
-                padding: const EdgeInsets.only(right: 8, top: 4),
-                child: _amountFields(line),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(right: 8, top: 12),
-                child: TextField(
-                  controller: line.details,
-                  decoration: const InputDecoration(
-                    labelText: 'Catatan barang (opsional)',
-                    isDense: true,
-                    border: OutlineInputBorder(),
-                  ),
+              const SizedBox(height: 12),
+              _amountFields(line),
+              const SizedBox(height: 12),
+              TextField(
+                controller: line.details,
+                decoration: const InputDecoration(
+                  labelText: 'Catatan pakaian / detail item (opsional)',
+                  hintText: 'Misal: 2 celana jeans, 3 kemeja putih',
                 ),
               ),
+              if (subtotal > 0) ...[
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    'Subtotal: ${formatRupiah(subtotal)}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: isDark ? AppColors.primaryLight : AppColors.primaryDark,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ],
         ),
@@ -393,157 +425,268 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Pesanan Baru')),
+      appBar: AppBar(title: const Text('Buat Pesanan Baru')),
       body: SafeArea(
         child: FutureBuilder<_FormData>(
-        future: _dataFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Text('Gagal memuat data: ${snapshot.error}'),
-            );
-          }
-          final data = snapshot.data!;
-          if (data.services.isEmpty) {
-            return const Center(child: Text('Belum ada layanan di server.'));
-          }
+          future: _dataFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Center(
+                child: Text('Gagal memuat data: ${snapshot.error}'),
+              );
+            }
+            final data = snapshot.data!;
+            if (data.services.isEmpty) {
+              return const Center(child: Text('Belum ada layanan di server.'));
+            }
 
-          final matches = data.speeds.where((s) => s.isSameDay);
-          final ServiceSpeed? sameDay = matches.isEmpty ? null : matches.first;
-          final sameDayAvailable = sameDay?.available ?? false;
-          final sameDayOn =
-              _priority == OrderPriority.express && sameDayAvailable;
-          final speedFee = sameDayOn ? (sameDay?.fee ?? 0) : 0;
-          final deliveryFee = _deliveryFee;
-          final servicesTotal = _servicesTotal;
+            final matches = data.speeds.where((s) => s.isSameDay);
+            final ServiceSpeed? sameDay = matches.isEmpty ? null : matches.first;
+            final sameDayAvailable = sameDay?.available ?? false;
+            final sameDayOn =
+                _priority == OrderPriority.express && sameDayAvailable;
+            final speedFee = sameDayOn ? (sameDay?.fee ?? 0) : 0;
+            final deliveryFee = _deliveryFee;
+            final servicesTotal = _servicesTotal;
+            final grandTotal = servicesTotal + speedFee + deliveryFee;
 
-          final String sameDaySubtitle;
-          if (sameDay == null) {
-            sameDaySubtitle = 'Tidak tersedia';
-          } else if (!sameDay.available) {
-            sameDaySubtitle = 'Sedang tidak tersedia';
-          } else if (sameDay.fee > 0) {
-            sameDaySubtitle =
-                'Selesai di hari yang sama • +${formatRupiah(sameDay.fee)}';
-          } else {
-            sameDaySubtitle =
-                'Selesai di hari yang sama • biaya tambahan dihitung sistem';
-          }
+            final String sameDaySubtitle;
+            if (sameDay == null) {
+              sameDaySubtitle = 'Tidak tersedia di sistem';
+            } else if (!sameDay.available) {
+              sameDaySubtitle = 'Sedang tidak menerima order same day';
+            } else if (sameDay.fee > 0) {
+              sameDaySubtitle =
+                  'Selesai hari yang sama • +${formatRupiah(sameDay.fee)}';
+            } else {
+              sameDaySubtitle = 'Selesai hari yang sama';
+            }
 
-          return ListView(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 32 + bottomInset),
-            children: [
-              Text('Pelanggan', style: textTheme.titleMedium),
-              const SizedBox(height: 8),
-              Card(
-                margin: EdgeInsets.zero,
-                child: ListTile(
-                  leading: const Icon(Icons.person_outline),
-                  title: Text(_customer?.name ?? 'Pilih pelanggan'),
-                  subtitle: _customer == null ? null : Text(_customer!.phone),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: _pickCustomer,
+            return ListView(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 32 + bottomInset),
+              children: [
+                // Section 1: Customer
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('1. Data Pelanggan', style: textTheme.titleMedium),
+                    if (_customer != null)
+                      TextButton.icon(
+                        icon: const Icon(Icons.swap_horiz, size: 16),
+                        label: const Text('Ganti'),
+                        onPressed: _pickCustomer,
+                      ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 24),
-              Text('Layanan', style: textTheme.titleMedium),
-              const SizedBox(height: 8),
-              for (final line in _lines) _lineCard(line, data.services),
-              TextButton.icon(
-                onPressed: () => setState(() => _lines.add(_LineDraft())),
-                icon: const Icon(Icons.add),
-                label: const Text('Tambah layanan'),
-              ),
-              const Divider(height: 32),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Same Day Service'),
-                subtitle: Text(sameDaySubtitle),
-                secondary: const Icon(Icons.bolt, color: Colors.orange),
-                value: sameDayOn,
-                onChanged: sameDayAvailable
-                    ? (on) => setState(
-                          () => _priority = on
-                              ? OrderPriority.express
-                              : OrderPriority.regular,
-                        )
-                    : null,
-              ),
-              const SizedBox(height: 16),
-              if (useMock) ...[
-                Text('Pengambilan', style: textTheme.titleMedium),
                 const SizedBox(height: 8),
-                FulfillmentFields(
-                  value: _fulfillment,
-                  onChanged: (f) => setState(() => _fulfillment = f),
-                  address: _address,
-                  fee: _fee,
-                  onFieldChanged: () => setState(() {}),
+                Card(
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    leading: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: _customer != null
+                            ? AppColors.primary.withValues(alpha: 0.15)
+                            : (isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        _customer != null ? Icons.person : Icons.person_add_outlined,
+                        color: _customer != null ? AppColors.primary : AppColors.neutral,
+                      ),
+                    ),
+                    title: Text(
+                      _customer?.name ?? 'Pilih Pelanggan',
+                      style: textTheme.titleMedium,
+                    ),
+                    subtitle: Text(
+                      _customer == null
+                          ? 'Klik untuk mencari pelanggan terdaftar'
+                          : (_customer!.phone.isNotEmpty ? _customer!.phone : 'Tanpa nomor HP'),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: _pickCustomer,
+                  ),
                 ),
-              ] else
-                Text(
-                  'Pilihan ambil sendiri / diantar belum tersedia di server.',
-                  style: textTheme.bodySmall,
+                const SizedBox(height: 24),
+
+                // Section 2: Services
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('2. Layanan Laundry', style: textTheme.titleMedium),
+                    TextButton.icon(
+                      onPressed: () => setState(() => _lines.add(_LineDraft())),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Tambah Baris'),
+                    ),
+                  ],
                 ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _notes,
-                decoration: const InputDecoration(
-                  labelText: 'Catatan pesanan (opsional)',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 8),
+                for (final line in _lines) _lineCard(line, data.services),
+                const SizedBox(height: 16),
+
+                // Section 3: Speed & Priority
+                Text('3. Kecepatan Pengerjaan', style: textTheme.titleMedium),
+                const SizedBox(height: 8),
+                Card(
+                  child: SwitchListTile(
+                    title: const Row(
+                      children: [
+                        Icon(Icons.bolt, color: AppColors.warning, size: 20),
+                        SizedBox(width: 8),
+                        Text('Layanan Same Day'),
+                      ],
+                    ),
+                    subtitle: Text(sameDaySubtitle),
+                    value: sameDayOn,
+                    onChanged: sameDayAvailable
+                        ? (on) => setState(
+                              () => _priority = on
+                                  ? OrderPriority.express
+                                  : OrderPriority.regular,
+                            )
+                        : null,
+                  ),
                 ),
-              ),
-              const Divider(height: 32),
-              _AmountRow(
-                label: 'Layanan (perkiraan)',
-                value: formatRupiah(servicesTotal),
-              ),
-              if (speedFee > 0)
-                _AmountRow(
-                  label: 'Same Day',
-                  value: formatRupiah(speedFee),
+                const SizedBox(height: 24),
+
+                // Section 4: Fulfillment (if mock)
+                if (useMock) ...[
+                  Text('4. Pengambilan / Pengantaran', style: textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: FulfillmentFields(
+                        value: _fulfillment,
+                        onChanged: (f) => setState(() => _fulfillment = f),
+                        address: _address,
+                        fee: _fee,
+                        onFieldChanged: () => setState(() {}),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+
+                // Section 5: Order Notes
+                Text(useMock ? '5. Catatan Kasir' : '4. Catatan Kasir', style: textTheme.titleMedium),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _notes,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Catatan khusus pesanan (opsional)',
+                    hintText: 'Misal: Pisahkan pakaian luntur, ekstra pewangi',
+                  ),
                 ),
-              if (deliveryFee > 0)
-                _AmountRow(label: 'Ongkir', value: formatRupiah(deliveryFee)),
-              _AmountRow(
-                label: 'Total (perkiraan)',
-                value: formatRupiah(servicesTotal + speedFee + deliveryFee),
-                bold: true,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Total resmi dihitung sistem saat pesanan disimpan.',
-                style: textTheme.bodySmall,
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  _error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                const SizedBox(height: 24),
+
+                // Section 6: Order Summary Card
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Ringkasan Transaksi', style: textTheme.titleMedium),
+                        const Divider(height: 20),
+                        _AmountRow(
+                          label: 'Subtotal Layanan',
+                          value: formatRupiah(servicesTotal),
+                        ),
+                        if (speedFee > 0)
+                          _AmountRow(
+                            label: 'Biaya Same Day',
+                            value: formatRupiah(speedFee),
+                          ),
+                        if (deliveryFee > 0)
+                          _AmountRow(
+                            label: 'Ongkos Kirim',
+                            value: formatRupiah(deliveryFee),
+                          ),
+                        const Divider(height: 20),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Estimasi Total Tagihan',
+                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              formatRupiah(grandTotal),
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                color: isDark ? AppColors.primaryLight : AppColors.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
+
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.dangerLight,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline, color: AppColors.danger, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _error!,
+                            style: const TextStyle(color: AppColors.dangerText, fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 24),
+
+                // Save Action Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: FilledButton.icon(
+                    onPressed: _saving ? null : _save,
+                    icon: _saving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.check),
+                    label: Text(_saving ? 'Menyimpan ke Odoo...' : 'Simpan & Terbitkan Pesanan'),
+                  ),
+                ),
+                SizedBox(height: 16 + bottomInset),
               ],
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: FilledButton(
-                  onPressed: _saving ? null : _save,
-                  child: Text(_saving ? 'Menyimpan...' : 'Simpan Pesanan'),
-                ),
-              ),
-              SizedBox(height: 16 + bottomInset),
-            ],
-          );
-        },
+            );
+          },
+        ),
       ),
-    ));
+    );
   }
 }
 
@@ -567,7 +710,7 @@ class _AmountRow extends StatelessWidget {
             ?.copyWith(fontWeight: FontWeight.bold)
         : Theme.of(context).textTheme.bodyMedium;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [Text(label, style: style), Text(value, style: style)],

@@ -5,13 +5,18 @@ import 'repositories/repositories.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'session.dart';
+import 'theme/app_theme.dart';
+import 'theme/theme_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   currentUser.addListener(() {
     apiClient.sessionId = currentUser.value?.sessionId;
   });
-  await initSession();
+  await Future.wait([
+    initSession(),
+    themeController.init(),
+  ]);
   runApp(const LaundryFlowApp());
 }
 
@@ -20,15 +25,22 @@ class LaundryFlowApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'LaundryFlow',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorSchemeSeed: Colors.blue, useMaterial3: true),
-      home: ValueListenableBuilder<AuthUser?>(
-        valueListenable: currentUser,
-        builder: (context, user, _) =>
-            user == null ? const LoginScreen() : const HomeScreen(),
-      ),
+    return ListenableBuilder(
+      listenable: themeController,
+      builder: (context, _) {
+        return MaterialApp(
+          title: 'LaundryFlow',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
+          themeMode: themeController.themeMode,
+          home: ValueListenableBuilder<AuthUser?>(
+            valueListenable: currentUser,
+            builder: (context, user, _) =>
+                user == null ? const LoginScreen() : const HomeScreen(),
+          ),
+        );
+      },
     );
   }
 }

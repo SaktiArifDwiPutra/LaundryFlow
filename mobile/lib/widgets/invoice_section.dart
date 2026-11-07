@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/invoice.dart';
 import '../repositories/repositories.dart';
+import '../theme/app_colors.dart';
 import '../utils/format.dart';
 
 class InvoiceSection extends StatefulWidget {
@@ -36,9 +37,8 @@ class _InvoiceSectionState extends State<InvoiceSection> {
 
   Future<void> _openPaymentDialog(Invoice invoice) async {
     String method = 'cash';
-    final amountController = TextEditingController(
-      text: invoice.amountDue > 0 ? '${invoice.amountDue}' : '${invoice.total}',
-    );
+    final targetAmount = invoice.amountDue > 0 ? invoice.amountDue : invoice.total;
+    final amountController = TextEditingController(text: '$targetAmount');
     final refController = TextEditingController();
     final notesController = TextEditingController();
 
@@ -50,16 +50,15 @@ class _InvoiceSectionState extends State<InvoiceSection> {
                 amountController.text.replaceAll(RegExp(r'\D'), ''),
               ) ??
               0;
-          final change = enteredAmount > invoice.amountDue && invoice.amountDue > 0
-              ? enteredAmount - invoice.amountDue
-              : (enteredAmount > invoice.total ? enteredAmount - invoice.total : 0);
+          final change = enteredAmount > targetAmount ? enteredAmount - targetAmount : 0;
+          final deficit = enteredAmount < targetAmount && enteredAmount > 0 ? targetAmount - enteredAmount : 0;
 
           return AlertDialog(
             title: const Row(
               children: [
-                Icon(Icons.point_of_sale, color: Colors.blue),
+                Icon(Icons.point_of_sale, color: AppColors.primary),
                 SizedBox(width: 8),
-                Text('Catat Pembayaran'),
+                Text('Catat Pembayaran Kasir'),
               ],
             ),
             content: SingleChildScrollView(
@@ -67,69 +66,180 @@ class _InvoiceSectionState extends State<InvoiceSection> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Total Tagihan: ${formatRupiah(invoice.total)}',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  // Total Bill Summary
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryContainerLight.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          invoice.amountDue > 0 ? 'Sisa Tagihan' : 'Total Tagihan',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          formatRupiah(targetAmount),
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primaryDark,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  if (invoice.amountDue > 0)
-                    Text(
-                      'Sisa Tagihan: ${formatRupiah(invoice.amountDue)}',
-                      style: const TextStyle(color: Colors.red),
-                    ),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    value: method,
-                    decoration: const InputDecoration(
-                      labelText: 'Metode Pembayaran',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'cash',
-                        child: Text('Tunai (Cash)'),
+
+                  // Method Segmented Chips
+                  const Text('Metode Pembayaran', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ChoiceChip(
+                          label: const Text('Tunai'),
+                          selected: method == 'cash',
+                          onSelected: (_) => setDialogState(() => method = 'cash'),
+                        ),
                       ),
-                      DropdownMenuItem(
-                        value: 'qris',
-                        child: Text('QRIS'),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: ChoiceChip(
+                          label: const Text('QRIS'),
+                          selected: method == 'qris',
+                          onSelected: (_) => setDialogState(() => method = 'qris'),
+                        ),
                       ),
-                      DropdownMenuItem(
-                        value: 'transfer',
-                        child: Text('Transfer Bank'),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: ChoiceChip(
+                          label: const Text('Transfer'),
+                          selected: method == 'transfer',
+                          onSelected: (_) => setDialogState(() => method = 'transfer'),
+                        ),
                       ),
                     ],
-                    onChanged: (val) {
-                      if (val != null) {
-                        setDialogState(() => method = val);
-                      }
-                    },
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
+
+                  // Amount Input Field
                   TextField(
                     controller: amountController,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
                       labelText: 'Nominal Bayar (Rp)',
-                      border: OutlineInputBorder(),
+                      prefixText: 'Rp ',
                     ),
                     onChanged: (_) => setDialogState(() {}),
                   ),
+
+                  // Quick Amount Chips for Cash
+                  if (method == 'cash') ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        ActionChip(
+                          label: const Text('Uang Pas'),
+                          onPressed: () {
+                            setDialogState(() {
+                              amountController.text = '$targetAmount';
+                            });
+                          },
+                        ),
+                        ActionChip(
+                          label: const Text('Rp 20.000'),
+                          onPressed: () {
+                            setDialogState(() {
+                              amountController.text = '20000';
+                            });
+                          },
+                        ),
+                        ActionChip(
+                          label: const Text('Rp 50.000'),
+                          onPressed: () {
+                            setDialogState(() {
+                              amountController.text = '50000';
+                            });
+                          },
+                        ),
+                        ActionChip(
+                          label: const Text('Rp 100.000'),
+                          onPressed: () {
+                            setDialogState(() {
+                              amountController.text = '100000';
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+
+                  // Change / Deficit Realtime Feedback
                   if (change > 0 && method == 'cash') ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      'Kembalian: ${formatRupiah(change)}',
-                      style: const TextStyle(
-                        color: Colors.green,
-                        fontWeight: FontWeight.bold,
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.successLight,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Uang Kembalian:',
+                            style: TextStyle(color: AppColors.successText, fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            formatRupiah(change),
+                            style: const TextStyle(
+                              color: AppColors.successText,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else if (deficit > 0) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.warningLight,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Bayar Sebagian (Kurang):',
+                            style: TextStyle(color: AppColors.warningText, fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            formatRupiah(deficit),
+                            style: const TextStyle(
+                              color: AppColors.warningText,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
+
                   const SizedBox(height: 12),
                   TextField(
                     controller: refController,
                     decoration: const InputDecoration(
                       labelText: 'No. Referensi (Opsional)',
-                      hintText: 'Misal ID Transaksi QRIS/Bank',
-                      border: OutlineInputBorder(),
+                      hintText: 'Misal ID Transaksi QRIS / Bank',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -137,7 +247,6 @@ class _InvoiceSectionState extends State<InvoiceSection> {
                     controller: notesController,
                     decoration: const InputDecoration(
                       labelText: 'Catatan Kasir (Opsional)',
-                      border: OutlineInputBorder(),
                     ),
                   ),
                 ],
@@ -150,7 +259,7 @@ class _InvoiceSectionState extends State<InvoiceSection> {
               ),
               FilledButton.icon(
                 icon: const Icon(Icons.check),
-                label: const Text('Konfirmasi'),
+                label: const Text('Konfirmasi Bayar'),
                 onPressed: () => Navigator.of(ctx).pop(true),
               ),
             ],
@@ -179,7 +288,7 @@ class _InvoiceSectionState extends State<InvoiceSection> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pembayaran berhasil dicatat.')),
+        const SnackBar(content: Text('Pembayaran berhasil dicatat ke sistem Odoo.')),
       );
       _reload();
       widget.onPaymentSuccess?.call();
@@ -201,7 +310,7 @@ class _InvoiceSectionState extends State<InvoiceSection> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Faktur & Pembayaran', style: Theme.of(context).textTheme.titleMedium),
+            Text('Faktur & Pembayaran Kasir', style: Theme.of(context).textTheme.titleMedium),
             if (_processing)
               const SizedBox(
                 width: 16,
@@ -226,9 +335,8 @@ class _InvoiceSectionState extends State<InvoiceSection> {
             final invoice = snapshot.data;
             if (invoice == null) {
               return const Card(
-                margin: EdgeInsets.zero,
                 child: Padding(
-                  padding: EdgeInsets.all(12),
+                  padding: EdgeInsets.all(14),
                   child: Text('Faktur belum diterbitkan untuk pesanan ini.'),
                 ),
               );
@@ -237,15 +345,14 @@ class _InvoiceSectionState extends State<InvoiceSection> {
             final isPaid = invoice.isPaid;
 
             return Card(
-              margin: EdgeInsets.zero,
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.receipt_long, color: Colors.blue),
+                        const Icon(Icons.receipt_long, color: AppColors.primary),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Column(
@@ -268,7 +375,7 @@ class _InvoiceSectionState extends State<InvoiceSection> {
                         _PaymentChip(invoice: invoice),
                       ],
                     ),
-                    const Divider(height: 20),
+                    const Divider(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -294,11 +401,11 @@ class _InvoiceSectionState extends State<InvoiceSection> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Sisa Tagihan', style: TextStyle(color: Colors.red)),
+                          const Text('Sisa Tagihan', style: TextStyle(color: AppColors.dangerText)),
                           Text(
                             formatRupiah(invoice.amountDue),
                             style: const TextStyle(
-                              color: Colors.red,
+                              color: AppColors.dangerText,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -310,11 +417,11 @@ class _InvoiceSectionState extends State<InvoiceSection> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Uang Kembalian', style: TextStyle(color: Colors.green)),
+                          const Text('Uang Kembalian', style: TextStyle(color: AppColors.successText)),
                           Text(
                             formatRupiah(invoice.changeAmount),
                             style: const TextStyle(
-                              color: Colors.green,
+                              color: AppColors.successText,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -322,15 +429,16 @@ class _InvoiceSectionState extends State<InvoiceSection> {
                       ),
                     ],
                     if (!isPaid) ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
-                        child: FilledButton.tonalIcon(
+                        height: 48,
+                        child: FilledButton.icon(
                           onPressed: _processing
                               ? null
                               : () => _openPaymentDialog(invoice),
-                          icon: const Icon(Icons.payment, size: 18),
-                          label: const Text('Catat Pembayaran di Kasir'),
+                          icon: const Icon(Icons.point_of_sale, size: 18),
+                          label: const Text('Catat Pembayaran Kasir'),
                         ),
                       ),
                     ],
@@ -352,22 +460,21 @@ class _PaymentChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = invoice.isPaid
-        ? Colors.green
-        : (invoice.isPartial ? Colors.orange : Colors.red);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final payColor = AppColors.paymentStatus(invoice.paymentState, isDark: isDark);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(12),
+        color: payColor.bg,
+        borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         invoice.paymentLabel,
         style: TextStyle(
-          color: color,
+          color: payColor.text,
           fontSize: 12,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/order.dart';
 import '../models/order_option.dart';
 import '../models/order_status.dart';
+import '../theme/app_colors.dart';
 import '../utils/format.dart';
 
 class PriorityBadge extends StatelessWidget {
@@ -13,22 +14,22 @@ class PriorityBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.orange.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(12),
+        color: AppColors.warningLight,
+        borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.bolt, size: 14, color: Colors.orange),
+          const Icon(Icons.bolt, size: 13, color: AppColors.warningText),
           const SizedBox(width: 2),
           Text(
             label,
             style: const TextStyle(
-              color: Colors.orange,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+              color: AppColors.warningText,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -50,10 +51,16 @@ class FulfillmentBadge extends StatelessWidget {
       children: [
         Icon(
           delivery ? Icons.delivery_dining : Icons.storefront_outlined,
-          size: 16,
+          size: 15,
+          color: AppColors.neutral,
         ),
         const SizedBox(width: 4),
-        Text(fulfillment.label, style: Theme.of(context).textTheme.bodySmall),
+        Text(
+          fulfillment.label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+        ),
       ],
     );
   }
@@ -71,17 +78,15 @@ class DueLabel extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final overdue = order.isOverdue;
-    final Color? color =
-        overdue ? Colors.red : Theme.of(context).textTheme.bodySmall?.color;
 
     return Text(
       overdue
           ? 'Terlambat ${formatOverdue(due)}'
           : 'Tenggat ${formatDue(due)}',
       style: TextStyle(
-        fontSize: 12,
-        color: color,
-        fontWeight: overdue ? FontWeight.bold : FontWeight.normal,
+        fontSize: 11,
+        color: overdue ? AppColors.dangerText : AppColors.neutral,
+        fontWeight: overdue ? FontWeight.bold : FontWeight.w500,
       ),
     );
   }

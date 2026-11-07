@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import '../session.dart';
+
 import '../models/order.dart';
 import '../models/order_status.dart';
 import '../repositories/repositories.dart';
-import '../utils/format.dart';
-import '../widgets/status_chip.dart';
+import '../theme/app_colors.dart';
+import '../widgets/order_tile.dart';
 import 'new_order_screen.dart';
 import 'order_detail_screen.dart';
 
@@ -87,17 +87,17 @@ class _OrderListScreenState extends State<OrderListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-            appBar: AppBar(
-        title: const Text('Pesanan'),
+      appBar: AppBar(
+        title: const Text('Daftar Pesanan'),
         actions: [
           IconButton(
-            tooltip: 'Keluar',
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await authRepository.logout();
-              await clearSession();
-            },
+            tooltip: 'Muat Ulang',
+            icon: const Icon(Icons.refresh),
+            onPressed: _reload,
           ),
         ],
       ),
@@ -108,29 +108,29 @@ class _OrderListScreenState extends State<OrderListScreen> {
       ),
       body: Column(
         children: [
+          // Search Input Field
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: TextField(
               controller: _search,
               textInputAction: TextInputAction.search,
               onChanged: (_) => setState(() {}),
               onSubmitted: _submitSearch,
               decoration: InputDecoration(
-                hintText: 'Cari nama, nomor HP, atau nomor pesanan',
-                prefixIcon: const Icon(Icons.search),
+                hintText: 'Cari nama, HP, atau no. pesanan...',
+                prefixIcon: const Icon(Icons.search, size: 20),
                 suffixIcon: _search.text.isEmpty
                     ? null
                     : IconButton(
-                        icon: const Icon(Icons.clear),
+                        icon: const Icon(Icons.clear, size: 18),
                         onPressed: _clearSearch,
                       ),
-                isDense: true,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
             ),
           ),
+
+          // Horizontal Status Filter Chips
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -156,6 +156,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
               ],
             ),
           ),
+          const SizedBox(height: 6),
+
+          // Order Stream / List
           Expanded(
             child: FutureBuilder<List<Order>>(
               future: _future,
@@ -165,17 +168,58 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 }
                 if (snapshot.hasError) {
                   return Center(
-                    child: Text('Gagal memuat pesanan: ${snapshot.error}'),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.error_outline, size: 48, color: AppColors.danger),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Gagal memuat pesanan: ${snapshot.error}',
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          FilledButton.icon(
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Coba Lagi'),
+                            onPressed: _reload,
+                          ),
+                        ],
+                      ),
+                    ),
                   );
                 }
 
                 final orders = snapshot.data!;
                 if (orders.isEmpty) {
                   return Center(
-                    child: Text(
-                      _hasFilter
-                          ? 'Tidak ada pesanan yang cocok.'
-                          : 'Belum ada pesanan.',
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.receipt_long_outlined,
+                          size: 56,
+                          color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _hasFilter
+                              ? 'Tidak ada pesanan yang cocok dengan pencarian.'
+                              : 'Belum ada pesanan.',
+                          style: textTheme.bodyLarge,
+                        ),
+                        if (_hasFilter) ...[
+                          const SizedBox(height: 12),
+                          TextButton(
+                            onPressed: () {
+                              _status = null;
+                              _clearSearch();
+                            },
+                            child: const Text('Hapus Filter'),
+                          ),
+                        ],
+                      ],
                     ),
                   );
                 }
@@ -187,9 +231,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
                   },
                   child: ListView.builder(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.only(top: 8, bottom: 88),
+                    padding: const EdgeInsets.only(top: 6, bottom: 88),
                     itemCount: orders.length,
-                    itemBuilder: (context, index) => _OrderCard(
+                    itemBuilder: (context, index) => OrderTile(
                       order: orders[index],
                       onTap: () => _openDetail(orders[index]),
                     ),
@@ -199,86 +243,6 @@ class _OrderListScreenState extends State<OrderListScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _OrderCard extends StatelessWidget {
-  const _OrderCard({required this.order, required this.onTap});
-
-  final Order order;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final service = order.lines.isEmpty ? '-' : order.lines.first.serviceName;
-
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      order.customer.name,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${order.number} • $service',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    formatRupiah(order.total),
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: (order.isPaid
-                                  ? Colors.green
-                                  : (order.isPartial ? Colors.orange : Colors.red))
-                              .withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          order.paymentLabel,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: order.isPaid
-                                ? Colors.green
-                                : (order.isPartial ? Colors.orange : Colors.red),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      StatusChip(status: order.status),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

@@ -5,6 +5,7 @@ import '../config.dart';
 import '../repositories/auth_repository.dart';
 import '../repositories/repositories.dart';
 import '../session.dart';
+import '../theme/app_colors.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -52,86 +53,172 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400),
+              constraints: const BoxConstraints(maxWidth: 420),
               child: Form(
                 key: _formKey,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Icon(
-                      Icons.local_laundry_service,
-                      size: 64,
-                      color: Theme.of(context).colorScheme.primary,
+                    // Brand Icon & Badge
+                    Center(
+                      child: Container(
+                        width: 72,
+                        height: 72,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.3),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.local_laundry_service,
+                          size: 38,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 18),
+
+                    // Headings
                     Text(
-                      'LaundryFlow',
+                      'LaundryFlow POS',
                       textAlign: TextAlign.center,
-                      style: textTheme.headlineMedium,
-                    ),
-                    const SizedBox(height: 32),
-                    TextFormField(
-                      controller: _login,
-                      autocorrect: false,
-                      textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(
-                        labelText: 'Username',
-                        border: OutlineInputBorder(),
+                      style: textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
                       ),
-                      validator: (v) => (v == null || v.trim().isEmpty)
-                          ? 'Username wajib diisi'
-                          : null,
                     ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _password,
-                      obscureText: _obscure,
-                      textInputAction: TextInputAction.done,
-                      onFieldSubmitted: (_) => _loading ? null : _submit(),
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscure ? Icons.visibility : Icons.visibility_off,
-                          ),
-                          onPressed: () => setState(() => _obscure = !_obscure),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Sistem Operasional & Kasir Laundry',
+                      textAlign: TextAlign.center,
+                      style: textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 36),
+
+                    // Login Card
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'Masuk ke Akun Kasir',
+                              style: textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: _login,
+                              autocorrect: false,
+                              textInputAction: TextInputAction.next,
+                              decoration: const InputDecoration(
+                                labelText: 'Username',
+                                hintText: 'Masukkan nama pengguna',
+                                prefixIcon: Icon(Icons.person_outline),
+                              ),
+                              validator: (v) => (v == null || v.trim().isEmpty)
+                                  ? 'Username wajib diisi'
+                                  : null,
+                            ),
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: _password,
+                              obscureText: _obscure,
+                              textInputAction: TextInputAction.done,
+                              onFieldSubmitted: (_) => _loading ? null : _submit(),
+                              decoration: InputDecoration(
+                                labelText: 'Password',
+                                hintText: 'Masukkan kata sandi',
+                                prefixIcon: const Icon(Icons.lock_outline),
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                  ),
+                                  onPressed: () => setState(() => _obscure = !_obscure),
+                                ),
+                              ),
+                              validator: (v) => (v == null || v.isEmpty)
+                                  ? 'Password wajib diisi'
+                                  : null,
+                            ),
+                            if (_error != null) ...[
+                              const SizedBox(height: 14),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.dangerLight,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.error_outline, color: AppColors.danger, size: 20),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _error!,
+                                        style: const TextStyle(color: AppColors.dangerText, fontSize: 13),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 24),
+                            SizedBox(
+                              height: 48,
+                              child: FilledButton(
+                                onPressed: _loading ? null : _submit,
+                                child: _loading
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Text('Masuk'),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      validator: (v) => (v == null || v.isEmpty)
-                          ? 'Password wajib diisi'
-                          : null,
                     ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        _error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 24),
-                    FilledButton(
-                      onPressed: _loading ? null : _submit,
-                      child: Text(_loading ? 'Masuk...' : 'Masuk'),
-                    ),
+
                     if (kDebugMode && useMock) ...[
                       const SizedBox(height: 16),
                       Text(
-                        'Mode contoh (mock): staf / staf123',
+                        'Demo Offline: staf / staf123',
                         textAlign: TextAlign.center,
                         style: textTheme.bodySmall,
                       ),
                     ],
+
+                    const SizedBox(height: 32),
+                    Center(
+                      child: Text(
+                        'Terhubung ke Odoo 20 • $baseUrl',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
