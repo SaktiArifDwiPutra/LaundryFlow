@@ -96,6 +96,10 @@ class Order {
     required this.notes,
     required this.createdAt,
     required this.updatedAt,
+    this.paymentStatus = 'unpaid',
+    this.paymentMethod = '',
+    this.amountPaid = 0,
+    this.amountDue = 0,
   });
 
   final int id;
@@ -116,6 +120,20 @@ class Order {
   final String notes;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String paymentStatus;
+  final String paymentMethod;
+  final int amountPaid;
+  final int amountDue;
+
+  bool get isPaid => paymentStatus == 'paid';
+  bool get isPartial => paymentStatus == 'partial';
+  bool get isUnpaid => paymentStatus == 'unpaid' || paymentStatus.isEmpty;
+
+  String get paymentLabel => switch (paymentStatus) {
+        'paid' => 'Lunas',
+        'partial' => 'Sebagian',
+        _ => 'Belum Lunas',
+      };
 
   factory Order.fromJson(Map<String, dynamic> json) {
     final status = OrderStatus.fromCode((json['state'] ?? json['status']) as String?);
@@ -186,6 +204,10 @@ class Order {
       notes: (json['notes'] as String?) ?? '',
       createdAt: createdAt,
       updatedAt: updatedAt,
+      paymentStatus: (json['payment_status'] as String?) ?? 'unpaid',
+      paymentMethod: (json['payment_method'] as String?) ?? '',
+      amountPaid: ((json['amount_paid'] ?? 0) as num).round(),
+      amountDue: ((json['amount_due'] ?? (json['total_amount'] ?? json['total'] ?? 0)) as num).round(),
     );
   }
 }
