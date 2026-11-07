@@ -314,35 +314,47 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                     itemCount: customers.length,
                     itemBuilder: (context, index) {
                       final c = customers[index];
-                      return Card(
+                      return Container(
                         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(14),
-                          onTap: widget.selectMode
-                              ? () => Navigator.of(context).pop(c)
-                              : () => _openCustomerActions(c),
-                          child: Padding(
-                            padding: const EdgeInsets.all(14),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary.withValues(alpha: 0.12),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      c.name.isNotEmpty ? c.name[0].toUpperCase() : '?',
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.primary,
+                        decoration: BoxDecoration(
+                          color: isDark ? AppColors.darkSurface : Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                            width: 1,
+                          ),
+                          boxShadow: AppColors.cardShadow(isDark: isDark),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(16),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: widget.selectMode
+                                ? () => Navigator.of(context).pop(c)
+                                : () => _openCustomerActions(c),
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary.withValues(alpha: isDark ? 0.25 : 0.12),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        c.name.isNotEmpty ? c.name[0].toUpperCase() : '?',
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w800,
+                                          color: AppColors.primary,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
                                 const SizedBox(width: 14),
                                 Expanded(
                                   child: Column(
@@ -393,8 +405,9 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                             ),
                           ),
                         ),
-                      );
-                    },
+                      ),
+                    );
+                  },
                   ),
                 );
               },

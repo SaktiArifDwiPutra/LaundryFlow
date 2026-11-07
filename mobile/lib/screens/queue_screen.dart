@@ -92,33 +92,103 @@ class _QueueScreenState extends State<QueueScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        titleSpacing: 16,
+        title: Row(
           children: [
-            const Text('Dashboard Operasional'),
-            if (user != null)
-              Text(
-                'Kasir: ${user.name}',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w400,
-                  color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                ),
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
+              child: const Icon(
+                Icons.local_laundry_service,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'LaundryFlow',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? AppColors.successDark.withValues(alpha: 0.4)
+                            : AppColors.successLight,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              color: AppColors.success,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'ONLINE',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              color: isDark ? const Color(0xFF86EFAC) : AppColors.successText,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  user != null ? 'Kasir: ${user.name}' : 'Kasir Aktif',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
         actions: [
           IconButton(
-            tooltip: 'Muat Ulang',
+            tooltip: 'Muat Ulang Antrian',
             icon: const Icon(Icons.refresh),
             onPressed: _reload,
           ),
+          const SizedBox(width: 4),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _newOrder,
-        icon: const Icon(Icons.add),
-        label: const Text('Pesanan Baru'),
+        icon: const Icon(Icons.add_shopping_cart, size: 20),
+        label: const Text(
+          'Pesanan Baru',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        ),
+        elevation: 4,
       ),
       body: FutureBuilder<_QueueData>(
         future: _future,
@@ -160,26 +230,28 @@ class _QueueScreenState extends State<QueueScreen> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Operational KPI Cards Grid (4 Essential Metrics)
+              // Operational KPI Bento Cards (4 Essential Metrics)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: Row(
                   children: [
                     Expanded(
                       child: _KpiCard(
-                        title: 'Total Aktif',
+                        title: 'Total Antrian',
                         value: summary.active,
+                        subtitle: 'Semua proses aktif',
                         icon: Icons.inventory_2_outlined,
                         color: AppColors.primary,
                         isSelected: _status == null,
                         onTap: () => _setStatus(null),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: _KpiCard(
                         title: 'Siap Diambil',
                         value: readyCount,
+                        subtitle: 'Siap diserahkan',
                         icon: Icons.check_circle_outline,
                         color: AppColors.success,
                         isSelected: _status == OrderStatus.ready,
@@ -190,26 +262,28 @@ class _QueueScreenState extends State<QueueScreen> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                 child: Row(
                   children: [
                     Expanded(
                       child: _KpiCard(
-                        title: 'Terlambat',
-                        value: summary.overdue,
-                        icon: Icons.alarm_outlined,
-                        color: summary.overdue > 0 ? AppColors.danger : AppColors.neutral,
+                        title: 'Kilat / Express',
+                        value: summary.express,
+                        subtitle: 'Prioritas hari ini',
+                        icon: Icons.bolt,
+                        color: AppColors.warning,
                         isSelected: false,
                         onTap: () => _setStatus(null),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: _KpiCard(
-                        title: 'Express / Sameday',
-                        value: summary.express,
-                        icon: Icons.bolt,
-                        color: AppColors.warning,
+                        title: 'Perlu Perhatian',
+                        value: summary.overdue,
+                        subtitle: summary.overdue > 0 ? 'Melewati tenggat' : 'Semua tepat waktu',
+                        icon: Icons.alarm_outlined,
+                        color: summary.overdue > 0 ? AppColors.danger : AppColors.neutral,
                         isSelected: false,
                         onTap: () => _setStatus(null),
                       ),
@@ -218,7 +292,7 @@ class _QueueScreenState extends State<QueueScreen> {
                 ),
               ),
 
-              // Filter Chips Carousel
+              // Filter Chips Bar with Stage Count Badges
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -248,21 +322,28 @@ class _QueueScreenState extends State<QueueScreen> {
 
               // Sub-header Context
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
                       _status == null
-                          ? 'Daftar Antrian Aktif (${orders.length})'
+                          ? 'Daftar Antrian (${orders.length})'
                           : '${_status!.label} (${orders.length})',
-                      style: textTheme.titleSmall?.copyWith(
+                      style: const TextStyle(
+                        fontSize: 14,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    Text(
-                      'Urut: Tenggat Terdekat',
-                      style: textTheme.bodySmall,
+                    Row(
+                      children: [
+                        const Icon(Icons.sort, size: 14, color: AppColors.neutral),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Tenggat Terdekat',
+                          style: textTheme.bodySmall?.copyWith(fontSize: 12),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -279,26 +360,48 @@ class _QueueScreenState extends State<QueueScreen> {
                       ? ListView(
                           physics: const AlwaysScrollableScrollPhysics(),
                           children: [
-                            const SizedBox(height: 64),
-                            Icon(
-                              Icons.fact_check_outlined,
-                              size: 56,
-                              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                            const SizedBox(height: 56),
+                            Center(
+                              child: Container(
+                                width: 80,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? AppColors.darkSurfaceElevated
+                                      : AppColors.lightSurfaceElevated,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.assignment_turned_in_outlined,
+                                  size: 40,
+                                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                                ),
+                              ),
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 16),
                             Center(
                               child: Text(
                                 _status == null
-                                    ? 'Tidak ada pesanan aktif saat ini.'
-                                    : 'Tidak ada pesanan dengan status ${_status!.label}.',
-                                style: textTheme.bodyMedium,
+                                    ? 'Tidak ada antrian cucian aktif'
+                                    : 'Tidak ada cucian dengan status ${_status!.label}',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Center(
+                              child: Text(
+                                'Sentuh tombol di bawah untuk mencatat pesanan baru.',
+                                style: textTheme.bodySmall,
                               ),
                             ),
                           ],
                         )
                       : ListView.builder(
                           physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.only(top: 4, bottom: 88),
+                          padding: const EdgeInsets.only(top: 2, bottom: 88),
                           itemCount: orders.length,
                           itemBuilder: (context, index) => OrderTile(
                             order: orders[index],
@@ -319,6 +422,7 @@ class _KpiCard extends StatelessWidget {
   const _KpiCard({
     required this.title,
     required this.value,
+    required this.subtitle,
     required this.icon,
     required this.color,
     required this.isSelected,
@@ -327,6 +431,7 @@ class _KpiCard extends StatelessWidget {
 
   final String title;
   final int value;
+  final String subtitle;
   final IconData icon;
   final Color color;
   final bool isSelected;
@@ -336,49 +441,76 @@ class _KpiCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: isDark ? 0.2 : 0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? color : color.withValues(alpha: isDark ? 0.4 : 0.25),
-            width: isSelected ? 1.8 : 1.0,
-          ),
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isSelected
+              ? color
+              : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
+          width: isSelected ? 2.0 : 1.0,
         ),
-        child: Row(
-          children: [
-            Icon(icon, size: 24, color: color),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$value',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: isDark ? Colors.white : color,
+        boxShadow: AppColors.cardShadow(isDark: isDark),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(13),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: isDark ? 0.25 : 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(icon, size: 16, color: color),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '$value',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.white : (isSelected ? color : AppColors.lightTextPrimary),
+                    letterSpacing: -0.5,
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

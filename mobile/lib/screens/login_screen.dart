@@ -111,17 +111,29 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 36),
 
                     // Login Card
-                    Card(
+                    Container(
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.darkSurface : Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                          width: 1,
+                        ),
+                        boxShadow: AppColors.cardShadow(isDark: isDark),
+                      ),
                       child: Padding(
-                        padding: const EdgeInsets.all(20),
+                        padding: const EdgeInsets.all(22),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             Text(
                               'Masuk ke Akun Kasir',
-                              style: textTheme.titleMedium,
+                              style: textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                              ),
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 18),
                             TextFormField(
                               controller: _login,
                               autocorrect: false,
@@ -162,7 +174,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
                                   color: AppColors.dangerLight,
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
                                 ),
                                 child: Row(
                                   children: [
@@ -171,28 +184,44 @@ class _LoginScreenState extends State<LoginScreen> {
                                     Expanded(
                                       child: Text(
                                         _error!,
-                                        style: const TextStyle(color: AppColors.dangerText, fontSize: 13),
+                                        style: const TextStyle(
+                                          color: AppColors.dangerText,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
                             ],
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 22),
                             SizedBox(
-                              height: 48,
+                              height: 50,
                               child: FilledButton(
                                 onPressed: _loading ? null : _submit,
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
                                 child: _loading
                                     ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
+                                        width: 22,
+                                        height: 22,
                                         child: CircularProgressIndicator(
-                                          strokeWidth: 2,
+                                          strokeWidth: 2.5,
                                           color: Colors.white,
                                         ),
                                       )
-                                    : const Text('Masuk'),
+                                    : const Text(
+                                        'Masuk ke Sistem Kasir',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
                               ),
                             ),
                           ],
