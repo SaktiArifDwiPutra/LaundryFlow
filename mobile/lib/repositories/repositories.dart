@@ -35,6 +35,6 @@ final OrderRepository orderRepository =
 final ServiceRepository serviceRepository =
     useMock ? MockServiceRepository() : OdooServiceRepository(apiClient);
 final InvoiceRepository invoiceRepository =
-    useMock ? MockInvoiceRepository(orderRepository) : OdooInvoiceRepository();
+    useMock ? MockInvoiceRepository(orderRepository) : OdooInvoiceRepository(apiClient);
 final WhatsAppRepository whatsappRepository =
     useMock ? MockWhatsAppRepository() : OdooWhatsAppRepository(apiClient);
