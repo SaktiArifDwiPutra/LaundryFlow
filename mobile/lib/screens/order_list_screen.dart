@@ -110,27 +110,49 @@ class _OrderListScreenState extends State<OrderListScreen> {
         children: [
           // Search Input Field
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: TextField(
-              controller: _search,
-              textInputAction: TextInputAction.search,
-              onChanged: (_) => setState(() {}),
-              onSubmitted: _submitSearch,
-              decoration: InputDecoration(
-                hintText: 'Cari nama, HP, atau no. pesanan...',
-                prefixIcon: const Icon(Icons.search, size: 20),
-                suffixIcon: _search.text.isEmpty
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.clear, size: 18),
-                        onPressed: _clearSearch,
-                      ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
+            child: SizedBox(
+              height: 40,
+              child: TextField(
+                controller: _search,
+                textInputAction: TextInputAction.search,
+                style: const TextStyle(fontSize: 13),
+                onChanged: (_) => setState(() {}),
+                onSubmitted: _submitSearch,
+                decoration: InputDecoration(
+                  hintText: 'Cari nama, HP, atau no. nota...',
+                  hintStyle: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                  ),
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  suffixIcon: _search.text.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.clear, size: 16),
+                          onPressed: _clearSearch,
+                        ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                  filled: true,
+                  fillColor: isDark ? AppColors.darkSurfaceElevated : Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                      color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                      color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
 
-          // Horizontal Status Filter Chips
+          // Horizontal Status Filter Chips (Compact)
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -140,7 +162,12 @@ class _OrderListScreenState extends State<OrderListScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: ChoiceChip(
                     label: const Text('Semua'),
+                    labelStyle: TextStyle(
+                      fontSize: 11,
+                      fontWeight: _status == null ? FontWeight.w700 : FontWeight.w500,
+                    ),
                     selected: _status == null,
+                    visualDensity: VisualDensity.compact,
                     onSelected: (_) => _setStatus(null),
                   ),
                 ),
@@ -149,14 +176,19 @@ class _OrderListScreenState extends State<OrderListScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: ChoiceChip(
                       label: Text(s.label),
+                      labelStyle: TextStyle(
+                        fontSize: 11,
+                        fontWeight: _status == s ? FontWeight.w700 : FontWeight.w500,
+                      ),
                       selected: _status == s,
+                      visualDensity: VisualDensity.compact,
                       onSelected: (_) => _setStatus(s),
                     ),
                   ),
               ],
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
 
           // Order Stream / List
           Expanded(

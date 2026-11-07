@@ -29,7 +29,9 @@ class _QueueScreenState extends State<QueueScreen> {
     OrderStatus.outForDelivery,
   ];
 
+  final _searchController = TextEditingController();
   OrderStatus? _status;
+  String _searchQuery = '';
   late Future<_QueueData> _future;
 
   @override
@@ -38,11 +40,18 @@ class _QueueScreenState extends State<QueueScreen> {
     _future = _load();
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<_QueueData> _load() async {
     final results = await Future.wait<Object>([
       orderRepository.summary(),
       orderRepository.list(
         status: _status,
+        q: _searchQuery,
         activeOnly: true,
         sort: OrderSort.dueAt,
       ),
@@ -60,8 +69,22 @@ class _QueueScreenState extends State<QueueScreen> {
   }
 
   void _setStatus(OrderStatus? status) {
-    _status = status;
-    _reload();
+    setState(() {
+      _status = status;
+      _future = _load();
+    });
+  }
+
+  void _onSearchChanged(String value) {
+    setState(() {
+      _searchQuery = value.trim();
+      _future = _load();
+    });
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    _onSearchChanged('');
   }
 
   Future<void> _openDetail(Order order) async {
@@ -91,79 +114,36 @@ class _QueueScreenState extends State<QueueScreen> {
     final user = currentUser.value;
 
     return Scaffold(
+      // 1. Ultra-Clean & Compact App Bar (Online text removed as requested)
       appBar: AppBar(
         titleSpacing: 16,
         title: Row(
           children: [
             Container(
-              width: 38,
-              height: 38,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
                 color: AppColors.primary,
                 borderRadius: BorderRadius.circular(10),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
               ),
               child: const Icon(
                 Icons.local_laundry_service,
                 color: Colors.white,
-                size: 22,
+                size: 20,
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    const Text(
-                      'LaundryFlow',
-                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? AppColors.successDark.withValues(alpha: 0.4)
-                            : AppColors.successLight,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: const BoxDecoration(
-                              color: AppColors.success,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'ONLINE',
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
-                              color: isDark ? const Color(0xFF86EFAC) : AppColors.successText,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                const Text(
+                  'LaundryFlow',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
                 ),
                 Text(
-                  user != null ? 'Kasir: ${user.name}' : 'Kasir Aktif',
+                  user != null ? 'Kasir: ${user.name}' : 'Kasir Laundry',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.w500,
                     color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                   ),
@@ -174,22 +154,24 @@ class _QueueScreenState extends State<QueueScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: 'Muat Ulang Antrian',
-            icon: const Icon(Icons.refresh),
+            tooltip: 'Muat Ulang',
+            icon: const Icon(Icons.refresh, size: 22),
             onPressed: _reload,
           ),
           const SizedBox(width: 4),
         ],
       ),
+
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _newOrder,
-        icon: const Icon(Icons.add_shopping_cart, size: 20),
+        icon: const Icon(Icons.add, size: 20),
         label: const Text(
           'Pesanan Baru',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
         ),
-        elevation: 4,
+        elevation: 3,
       ),
+
       body: FutureBuilder<_QueueData>(
         future: _future,
         builder: (context, snapshot) {
@@ -203,7 +185,7 @@ class _QueueScreenState extends State<QueueScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.error_outline, size: 48, color: AppColors.danger),
+                    const Icon(Icons.error_outline, size: 44, color: AppColors.danger),
                     const SizedBox(height: 12),
                     Text(
                       'Gagal memuat antrian: ${snapshot.error}',
@@ -230,69 +212,104 @@ class _QueueScreenState extends State<QueueScreen> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Operational KPI Bento Cards (4 Essential Metrics)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              const SizedBox(height: 8),
+
+              // 2. Space-Efficient Single-Row KPI Metric Bar (Compact ~44px height)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   children: [
-                    Expanded(
-                      child: _KpiCard(
-                        title: 'Total Antrian',
-                        value: summary.active,
-                        subtitle: 'Semua proses aktif',
-                        icon: Icons.inventory_2_outlined,
-                        color: AppColors.primary,
-                        isSelected: _status == null,
-                        onTap: () => _setStatus(null),
-                      ),
+                    _CompactKpiChip(
+                      label: 'Antrian',
+                      value: summary.active,
+                      icon: Icons.inventory_2_outlined,
+                      color: AppColors.primary,
+                      isSelected: _status == null,
+                      isDark: isDark,
+                      onTap: () => _setStatus(null),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _KpiCard(
-                        title: 'Siap Diambil',
-                        value: readyCount,
-                        subtitle: 'Siap diserahkan',
-                        icon: Icons.check_circle_outline,
-                        color: AppColors.success,
-                        isSelected: _status == OrderStatus.ready,
-                        onTap: () => _setStatus(OrderStatus.ready),
-                      ),
+                    const SizedBox(width: 8),
+                    _CompactKpiChip(
+                      label: 'Siap Diambil',
+                      value: readyCount,
+                      icon: Icons.check_circle_outline,
+                      color: AppColors.success,
+                      isSelected: _status == OrderStatus.ready,
+                      isDark: isDark,
+                      onTap: () => _setStatus(OrderStatus.ready),
                     ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _KpiCard(
-                        title: 'Kilat / Express',
-                        value: summary.express,
-                        subtitle: 'Prioritas hari ini',
-                        icon: Icons.bolt,
-                        color: AppColors.warning,
-                        isSelected: false,
-                        onTap: () => _setStatus(null),
-                      ),
+                    const SizedBox(width: 8),
+                    _CompactKpiChip(
+                      label: 'Kilat',
+                      value: summary.express,
+                      icon: Icons.bolt,
+                      color: AppColors.warning,
+                      isSelected: false,
+                      isDark: isDark,
+                      onTap: () => _setStatus(null),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _KpiCard(
-                        title: 'Perlu Perhatian',
-                        value: summary.overdue,
-                        subtitle: summary.overdue > 0 ? 'Melewati tenggat' : 'Semua tepat waktu',
-                        icon: Icons.alarm_outlined,
-                        color: summary.overdue > 0 ? AppColors.danger : AppColors.neutral,
-                        isSelected: false,
-                        onTap: () => _setStatus(null),
-                      ),
+                    const SizedBox(width: 8),
+                    _CompactKpiChip(
+                      label: 'Terlambat',
+                      value: summary.overdue,
+                      icon: Icons.alarm_outlined,
+                      color: summary.overdue > 0 ? AppColors.danger : AppColors.neutral,
+                      isSelected: false,
+                      isDark: isDark,
+                      onTap: () => _setStatus(null),
                     ),
                   ],
                 ),
               ),
 
-              // Filter Chips Bar with Stage Count Badges
+              const SizedBox(height: 8),
+
+              // 3. Compact Search Bar in Queue (Comfortable searching, no cramped feeling)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: SizedBox(
+                  height: 40,
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: _onSearchChanged,
+                    style: const TextStyle(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Cari nama, no. nota, atau nomor HP...',
+                      hintStyle: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                      ),
+                      prefixIcon: const Icon(Icons.search, size: 18),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 16),
+                              onPressed: _clearSearch,
+                            )
+                          : null,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                      filled: true,
+                      fillColor: isDark ? AppColors.darkSurfaceElevated : Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 6),
+
+              // 4. Compact Stage Filter Pills
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -301,9 +318,13 @@ class _QueueScreenState extends State<QueueScreen> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: ChoiceChip(
-                        avatar: const Icon(Icons.all_inbox, size: 16),
                         label: Text('Semua (${summary.active})'),
+                        labelStyle: TextStyle(
+                          fontSize: 11,
+                          fontWeight: _status == null ? FontWeight.w700 : FontWeight.w500,
+                        ),
                         selected: _status == null,
+                        visualDensity: VisualDensity.compact,
                         onSelected: (_) => _setStatus(null),
                       ),
                     ),
@@ -312,7 +333,12 @@ class _QueueScreenState extends State<QueueScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         child: ChoiceChip(
                           label: Text('${s.label} (${summary.byStatus[s] ?? 0})'),
+                          labelStyle: TextStyle(
+                            fontSize: 11,
+                            fontWeight: _status == s ? FontWeight.w700 : FontWeight.w500,
+                          ),
                           selected: _status == s,
+                          visualDensity: VisualDensity.compact,
                           onSelected: (_) => _setStatus(s),
                         ),
                       ),
@@ -320,36 +346,9 @@ class _QueueScreenState extends State<QueueScreen> {
                 ),
               ),
 
-              // Sub-header Context
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      _status == null
-                          ? 'Daftar Antrian (${orders.length})'
-                          : '${_status!.label} (${orders.length})',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        const Icon(Icons.sort, size: 14, color: AppColors.neutral),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Tenggat Terdekat',
-                          style: textTheme.bodySmall?.copyWith(fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+              const SizedBox(height: 4),
 
-              // Orders List with Pull-to-Refresh
+              // 5. Orders Stream / List (Takes up 75%+ of viewport!)
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () async {
@@ -360,11 +359,11 @@ class _QueueScreenState extends State<QueueScreen> {
                       ? ListView(
                           physics: const AlwaysScrollableScrollPhysics(),
                           children: [
-                            const SizedBox(height: 56),
+                            const SizedBox(height: 48),
                             Center(
                               child: Container(
-                                width: 80,
-                                height: 80,
+                                width: 64,
+                                height: 64,
                                 decoration: BoxDecoration(
                                   color: isDark
                                       ? AppColors.darkSurfaceElevated
@@ -373,35 +372,39 @@ class _QueueScreenState extends State<QueueScreen> {
                                 ),
                                 child: Icon(
                                   Icons.assignment_turned_in_outlined,
-                                  size: 40,
+                                  size: 32,
                                   color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 12),
                             Center(
                               child: Text(
-                                _status == null
-                                    ? 'Tidak ada antrian cucian aktif'
-                                    : 'Tidak ada cucian dengan status ${_status!.label}',
+                                _searchQuery.isNotEmpty
+                                    ? 'Tidak ada pesanan cocok dengan "$_searchQuery"'
+                                    : (_status == null
+                                        ? 'Tidak ada antrian cucian aktif'
+                                        : 'Tidak ada pesanan dengan status ${_status!.label}'),
                                 style: const TextStyle(
-                                  fontSize: 16,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 4),
                             Center(
                               child: Text(
-                                'Sentuh tombol di bawah untuk mencatat pesanan baru.',
-                                style: textTheme.bodySmall,
+                                _searchQuery.isNotEmpty
+                                    ? 'Coba gunakan kata kunci nama atau nomor lain.'
+                                    : 'Pesanan baru akan otomatis muncul di sini.',
+                                style: textTheme.bodySmall?.copyWith(fontSize: 12),
                               ),
                             ),
                           ],
                         )
                       : ListView.builder(
                           physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.only(top: 2, bottom: 88),
+                          padding: const EdgeInsets.only(top: 2, bottom: 84),
                           itemCount: orders.length,
                           itemBuilder: (context, index) => OrderTile(
                             order: orders[index],
@@ -418,98 +421,72 @@ class _QueueScreenState extends State<QueueScreen> {
   }
 }
 
-class _KpiCard extends StatelessWidget {
-  const _KpiCard({
-    required this.title,
+/// Compact Metric Chip (~38px height) saving substantial screen real estate
+class _CompactKpiChip extends StatelessWidget {
+  const _CompactKpiChip({
+    required this.label,
     required this.value,
-    required this.subtitle,
     required this.icon,
     required this.color,
     required this.isSelected,
+    required this.isDark,
     required this.onTap,
   });
 
-  final String title;
+  final String label;
   final int value;
-  final String subtitle;
   final IconData icon;
   final Color color;
   final bool isSelected;
+  final bool isDark;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isSelected
-              ? color
-              : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
-          width: isSelected ? 2.0 : 1.0,
-        ),
-        boxShadow: AppColors.cardShadow(isDark: isDark),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.all(13),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: isDark ? 0.25 : 0.12),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(icon, size: 16, color: color),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '$value',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    color: isDark ? Colors.white : (isSelected ? color : AppColors.lightTextPrimary),
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6.5),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? color.withValues(alpha: isDark ? 0.25 : 0.12)
+                : (isDark ? AppColors.darkSurface : Colors.white),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected
+                  ? color
+                  : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
+              width: isSelected ? 1.8 : 1.0,
             ),
+            boxShadow: AppColors.cardShadow(isDark: isDark),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 15, color: color),
+              const SizedBox(width: 6),
+              Text(
+                '$value',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? Colors.white : color,
+                ),
+              ),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                ),
+              ),
+            ],
           ),
         ),
       ),
