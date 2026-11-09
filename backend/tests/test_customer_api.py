@@ -27,10 +27,17 @@ class TestCustomerApi(TransactionCase):
         cls.admin_user = cls.env.ref('base.user_admin')
         cls.public_user = cls.env.ref('base.public_user')
 
-        # Use existing partners only (DO NOT CREATE NEW PARTNERS)
-        cls.partner_with_phone = cls.env['res.partner'].search([('phone', '!=', False)], limit=1)
+        # Use existing customer partners only (exclude internal staff)
+        cls.partner_with_phone = cls.env['res.partner'].search([
+            ('phone', '!=', False),
+            '|', ('user_ids', '=', False), ('user_ids.share', '=', True),
+        ], limit=1)
         if not cls.partner_with_phone:
-            cls.partner_with_phone = cls.env['res.partner'].search([], limit=1)
+            cls.partner_with_phone = cls.env['res.partner'].create({
+                'name': 'Pelanggan Uji Laundry',
+                'phone': '081234567890',
+                'customer_rank': 1,
+            })
 
         # Ensure test phone fixtures are isolated inside the rolled-back TransactionCase savepoint
         test_phones = [
@@ -536,5 +543,34 @@ class TestCustomerApi(TransactionCase):
             self.assertIn('application/json', resp_err.headers.get('Content-Type', ''))
             err_body = json.loads(resp_err.get_data(as_text=True))
             self.assertEqual(set(err_body.keys()), {'success', 'message'})
+
+    def test_26_customer_search_excludes_internal_staff(self):
+        """Memastikan pencarian pelanggan mengecualikan akun internal staf dan admin Odoo."""
+        admin_partner = self.admin_user.partner_id
+        mock_req = self._mock_request(user=self.admin_user)
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
+            response = self.controller.search_customers(q=admin_partner.name[:5])
+            if response.status_code == 200:
+                data = json.loads(response.get_data(as_text=True))
+                result_ids = [p['id'] for p in data.get('data', [])]
+                self.assertNotIn(admin_partner.id, result_ids)
+            else:
+                self.assertEqual(response.status_code, 404)
+
+    def test_27_create_customer_sets_customer_rank(self):
+        """Memastikan pembuatan pelanggan baru mengeset customer_rank = 1."""
+        payload = json.dumps({
+            'name': 'Pelanggan Baru Rank Satu',
+            'phone': '089912345678',
+            'street': 'Jl. Melati No. 5',
+        }).encode('utf-8')
+        mock_req = self._mock_request(user=self.admin_user, method='POST', data=payload)
+        with patch('odoo.addons.laundryflow_backend.controllers.customer_controller.request', mock_req):
+            resp = self.controller.create_customer()
+            self.assertEqual(resp.status_code, 201)
+            data = json.loads(resp.get_data(as_text=True))
+            new_id = data['data']['id']
+            partner = self.env['res.partner'].browse(new_id)
+            self.assertEqual(partner.customer_rank, 1)
             self.assertIs(err_body['success'], False)
             self.assertIn('email', err_body['message'].lower())

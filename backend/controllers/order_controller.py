@@ -1,6 +1,5 @@
 import json
 import logging
-from datetime import datetime
 from odoo import http
 from odoo.http import request
 from odoo.http.session import session_store
@@ -19,6 +18,24 @@ class OrderApiController(BaseApiController):
     - Menolak Same Day jika sedang tidak tersedia
     - Biaya tambahan diambil dari konfigurasi Odoo jika sudah dikonfirmasi
     """
+
+    @classmethod
+    def _compute_order_stages_and_next(cls, order):
+        """Menghitung daftar tahapan workflow (stages) dan status berikutnya (next_status) untuk pesanan tertentu."""
+        if order.state == 'cancelled':
+            return [], None
+        pipeline = order._get_process_pipeline() if hasattr(order, '_get_process_pipeline') else ['washing', 'drying', 'ironing']
+        delivery = getattr(order, 'delivery_type', 'pickup') or "pickup"
+        stages = ["received"] + pipeline + ["ready"]
+        if delivery == "delivery":
+            stages.append("out_for_delivery")
+        stages.append("completed")
+        next_status = None
+        if order.state in stages:
+            idx = stages.index(order.state)
+            if idx + 1 < len(stages):
+                next_status = stages[idx + 1]
+        return stages, next_status
 
     @http.route(
         [
@@ -122,6 +139,16 @@ class OrderApiController(BaseApiController):
             if speed_param and str(speed_param).strip():
                 domain.append(('service_speed', '=', str(speed_param).strip()))
 
+            # Filter pencarian teks bebas (q: nomor order, nama pelanggan, nomor WhatsApp)
+            q_param = kwargs.get('q') or request.params.get('q')
+            if q_param and str(q_param).strip():
+                q_clean = str(q_param).strip()
+                domain.append('|')
+                domain.append(('name', 'ilike', q_clean))
+                domain.append('|')
+                domain.append(('partner_id.name', 'ilike', q_clean))
+                domain.append(('whatsapp_phone', 'ilike', q_clean))
+
             # Pagination
             limit = 50
             limit_raw = kwargs.get('limit') or request.params.get('limit')
@@ -152,38 +179,32 @@ class OrderApiController(BaseApiController):
 
             data = []
             for order in orders:
-                inv = getattr(order, 'invoice_id', None)
-                if inv and inv.exists():
-                    p_state = inv.payment_state or 'not_paid'
-                    pay_status = 'paid' if p_state in ('paid', 'in_payment') else ('partial' if p_state == 'partial' else 'unpaid')
-                    tot = float(inv.amount_total or order.total_amount or 0.0)
-                    due = float(getattr(inv, 'amount_residual', 0.0) if pay_status != 'paid' else 0.0)
-                    paid = float(max(0.0, tot - due))
-                else:
-                    tot = float(order.total_amount or 0.0)
-                    pay_status = 'paid' if order.state == 'completed' else 'unpaid'
-                    paid = tot if pay_status == 'paid' else 0.0
-                    due = 0.0 if pay_status == 'paid' else tot
-
+                stages, next_status = self._compute_order_stages_and_next(order)
+                partner_phone = getattr(order.partner_id, 'phone', None) or getattr(order.partner_id, 'mobile', None) or order.whatsapp_phone or ''
                 data.append({
                     'id': order.id,
                     'name': order.name,
                     'order_date': order.order_date.isoformat() if order.order_date else None,
                     'partner_id': order.partner_id.id,
                     'partner_name': order.partner_id.name,
+                    'partner_phone': partner_phone,
+                    'delivery_type': getattr(order, 'delivery_type', 'pickup') or 'pickup',
+                    'delivery_fee': float(getattr(order, 'delivery_fee', 0.0) or 0.0),
                     'service_speed': order.service_speed,
                     'service_speed_fee': float(order.service_speed_fee or 0.0),
                     'weight': float(order.weight or 0.0),
-                    'total_amount': tot,
-                    'payment_status': pay_status,
-                    'payment_method': 'cash' if pay_status == 'paid' else '',
-                    'amount_paid': paid,
-                    'amount_due': due,
+                    'total_amount': float(order.total_amount or 0.0),
                     'state': order.state,
+                    'stages': stages,
+                    'next_status': next_status,
                     'notes': order.notes or '',
                     'whatsapp_status': order.whatsapp_status,
                     'whatsapp_phone': order.whatsapp_phone,
                     'whatsapp_sent': bool(order.whatsapp_sent),
+                    'payment_status': getattr(order, 'payment_status', 'unpaid') or 'unpaid',
+                    'payment_method': getattr(order, 'payment_method', None) or None,
+                    'amount_paid': float(getattr(order, 'amount_paid', 0.0) or 0.0),
+                    'amount_due': float(getattr(order, 'amount_due', 0.0) or 0.0),
                     'lines_count': len(order.line_ids),
                 })
 
@@ -253,6 +274,13 @@ class OrderApiController(BaseApiController):
                     'success': False,
                     'message': f'Pelanggan dengan ID {pid} tidak ditemukan.',
                 }, status=404)
+
+            # Validasi partner bukan akun staf internal / admin Odoo
+            if partner.sudo().user_ids and any(not u.share for u in partner.sudo().user_ids):
+                return self._json_response({
+                    'success': False,
+                    'message': 'Akun staf/admin tidak dapat dipilih sebagai pelanggan pesanan.',
+                }, status=400)
 
             # Validasi hak akses portal: pelanggan hanya boleh membuat order untuk dirinya sendiri
             if user.has_group('base.group_portal') and user.partner_id.id != pid:
@@ -410,9 +438,25 @@ class OrderApiController(BaseApiController):
                     'notes': line.get('notes', ''),
                 }))
 
+            # 8. Opsi Pengambilan & Pengantaran (Fulfillment: pickup vs delivery)
+            delivery_type_input = str(body.get('delivery_type') or body.get('fulfillment') or 'pickup').strip().lower()
+            if delivery_type_input not in ['pickup', 'delivery']:
+                delivery_type_input = 'pickup'
+
+            delivery_address_input = body.get('delivery_address') or ''
+            delivery_fee_input = 0.0
+            if delivery_type_input == 'delivery':
+                try:
+                    delivery_fee_input = max(0.0, float(body.get('delivery_fee') or 0.0))
+                except (ValueError, TypeError):
+                    delivery_fee_input = 0.0
+
             vals = {
                 'partner_id': pid,
                 'service_speed': speed,
+                'delivery_type': delivery_type_input,
+                'delivery_address': delivery_address_input,
+                'delivery_fee': delivery_fee_input,
                 'notes': body.get('notes', ''),
                 'item_details': body.get('item_details', ''),
                 'user_id': user.id,
@@ -446,6 +490,11 @@ class OrderApiController(BaseApiController):
                     'item_details': ol.item_details or '',
                 })
 
+            stages, next_status = self._compute_order_stages_and_next(order)
+            partner_phone = getattr(order.partner_id, 'phone', None) or getattr(order.partner_id, 'mobile', None) or order.whatsapp_phone or ''
+            partner_address = order.partner_id.contact_address or ''
+            delivery_address = getattr(order, 'delivery_address', None) or partner_address
+
             return self._json_response({
                 'success': True,
                 'message': 'Pesanan berhasil dibuat.',
@@ -455,11 +504,18 @@ class OrderApiController(BaseApiController):
                     'order_date': order.order_date.isoformat() if order.order_date else None,
                     'partner_id': order.partner_id.id,
                     'partner_name': order.partner_id.name,
+                    'partner_phone': partner_phone,
+                    'partner_address': partner_address,
+                    'delivery_type': getattr(order, 'delivery_type', 'pickup') or 'pickup',
+                    'delivery_address': delivery_address,
+                    'delivery_fee': float(getattr(order, 'delivery_fee', 0.0) or 0.0),
                     'service_speed': order.service_speed,
                     'service_speed_fee': order.service_speed_fee,
                     'weight': order.weight,
                     'total_amount': order.total_amount,
                     'state': order.state,
+                    'stages': stages,
+                    'next_status': next_status,
                     'notes': order.notes or '',
                     'lines': lines_resp,
                 }
@@ -523,18 +579,10 @@ class OrderApiController(BaseApiController):
                     'item_details': line.item_details or '',
                 })
 
-            inv = getattr(order, 'invoice_id', None)
-            if inv and inv.exists():
-                p_state = inv.payment_state or 'not_paid'
-                pay_status = 'paid' if p_state in ('paid', 'in_payment') else ('partial' if p_state == 'partial' else 'unpaid')
-                tot = float(inv.amount_total or order.total_amount or 0.0)
-                due = float(getattr(inv, 'amount_residual', 0.0) if pay_status != 'paid' else 0.0)
-                paid = float(max(0.0, tot - due))
-            else:
-                tot = float(order.total_amount or 0.0)
-                pay_status = 'paid' if order.state == 'completed' else 'unpaid'
-                paid = tot if pay_status == 'paid' else 0.0
-                due = 0.0 if pay_status == 'paid' else tot
+            stages, next_status = self._compute_order_stages_and_next(order)
+            partner_phone = getattr(order.partner_id, 'phone', None) or getattr(order.partner_id, 'mobile', None) or order.whatsapp_phone or ''
+            partner_address = order.partner_id.contact_address or ''
+            delivery_address = getattr(order, 'delivery_address', None) or partner_address
 
             return self._json_response({
                 'success': True,
@@ -544,219 +592,36 @@ class OrderApiController(BaseApiController):
                     'order_date': order.order_date.isoformat() if order.order_date else None,
                     'partner_id': order.partner_id.id,
                     'partner_name': order.partner_id.name,
+                    'partner_phone': partner_phone,
+                    'partner_address': partner_address,
+                    'delivery_type': getattr(order, 'delivery_type', 'pickup') or 'pickup',
+                    'delivery_address': delivery_address,
+                    'delivery_fee': float(getattr(order, 'delivery_fee', 0.0) or 0.0),
                     'service_speed': order.service_speed,
                     'service_speed_fee': order.service_speed_fee,
                     'weight': order.weight,
-                    'total_amount': tot,
-                    'payment_status': pay_status,
-                    'payment_method': 'cash' if pay_status == 'paid' else '',
-                    'amount_paid': paid,
-                    'amount_due': due,
+                    'total_amount': order.total_amount,
                     'state': order.state,
+                    'stages': stages,
+                    'next_status': next_status,
                     'notes': order.notes or '',
                     'whatsapp_status': order.whatsapp_status,
                     'whatsapp_phone': order.whatsapp_phone,
                     'whatsapp_sent': bool(order.whatsapp_sent),
                     'whatsapp_last_sent': order.whatsapp_last_sent.strftime('%Y-%m-%d %H:%M:%S') if order.whatsapp_last_sent else None,
+                    'payment_status': getattr(order, 'payment_status', 'unpaid') or 'unpaid',
+                    'payment_method': getattr(order, 'payment_method', None) or None,
+                    'amount_paid': float(getattr(order, 'amount_paid', 0.0) or 0.0),
+                    'amount_due': float(getattr(order, 'amount_due', 0.0) or 0.0),
+                    'change_amount': float(getattr(order, 'change_amount', 0.0) or 0.0),
+                    'payment_date': order.payment_date.strftime('%Y-%m-%d %H:%M:%S') if getattr(order, 'payment_date', None) else None,
+                    'payment_reference': getattr(order, 'payment_reference', None) or None,
                     'lines': lines_data,
                 }
             }, status=200)
 
         except Exception as e:
             _logger.exception("Error in get_order_detail: %s", str(e))
-            return self._json_response({
-                'success': False,
-                'message': 'Terjadi kesalahan pada server.',
-            }, status=500)
-
-    @http.route(
-        [
-            '/api/laundry/orders/<int:order_id>/invoice',
-            '/api/orders/<int:order_id>/invoice',
-        ],
-        type='http',
-        auth='public',
-        methods=['GET', 'OPTIONS'],
-        csrf=False,
-    )
-    def get_order_invoice(self, order_id, **kwargs):
-        """
-        Mengembalikan informasi faktur / tagihan untuk pesanan laundry tertentu.
-        """
-        if request.httprequest.method == 'OPTIONS':
-            return self._json_response({'status': 'ok'})
-
-        try:
-            user = self._get_authenticated_user(request, session_store_fn=session_store)
-            if not user:
-                return self._json_response({
-                    'success': False,
-                    'message': 'Autentikasi diperlukan. Akses tidak diizinkan.',
-                }, status=401)
-
-            order = request.env['laundry.order'].with_user(user).browse(order_id)
-            if not order.exists():
-                return self._json_response({
-                    'success': False,
-                    'message': f'Pesanan dengan ID {order_id} tidak ditemukan.',
-                }, status=404)
-
-            # Portal user check
-            if user.has_group('base.group_portal') and user.partner_id.id != order.partner_id.id:
-                return self._json_response({
-                    'success': False,
-                    'message': 'Akses ditolak: Anda hanya dapat melihat pesanan Anda sendiri.',
-                }, status=403)
-
-            inv = getattr(order, 'invoice_id', None)
-            if inv and inv.exists():
-                p_state = inv.payment_state or 'not_paid'
-                pay_status = 'paid' if p_state in ('paid', 'in_payment') else ('partial' if p_state == 'partial' else 'unpaid')
-                tot = float(inv.amount_total or order.total_amount or 0.0)
-                due = float(getattr(inv, 'amount_residual', 0.0) if pay_status != 'paid' else 0.0)
-                paid = float(max(0.0, tot - due))
-                inv_number = inv.name or f"INV/{order.name}"
-                inv_state = inv.state or 'posted'
-            else:
-                tot = float(order.total_amount or 0.0)
-                pay_status = 'paid' if order.state == 'completed' else 'unpaid'
-                paid = tot if pay_status == 'paid' else 0.0
-                due = 0.0 if pay_status == 'paid' else tot
-                inv_number = f"INV/{order.name}"
-                inv_state = 'posted'
-
-            return self._json_response({
-                'success': True,
-                'data': {
-                    'id': inv.id if (inv and inv.exists()) else order.id,
-                    'order_id': order.id,
-                    'order_number': order.name,
-                    'invoice_number': inv_number,
-                    'state': inv_state,
-                    'payment_status': pay_status,
-                    'total_amount': tot,
-                    'amount_paid': paid,
-                    'amount_due': due,
-                    'change_amount': 0.0,
-                    'payment_method': 'cash' if pay_status == 'paid' else '',
-                    'currency': order.currency_id.name if order.currency_id else 'IDR',
-                }
-            }, status=200)
-
-        except Exception as e:
-            _logger.exception("Error in get_order_invoice: %s", str(e))
-            return self._json_response({
-                'success': False,
-                'message': 'Terjadi kesalahan pada server.',
-            }, status=500)
-
-    @http.route(
-        [
-            '/api/laundry/orders/<int:order_id>/payment',
-            '/api/orders/<int:order_id>/payment',
-        ],
-        type='http',
-        auth='public',
-        methods=['POST', 'OPTIONS'],
-        csrf=False,
-    )
-    def record_order_payment(self, order_id, **kwargs):
-        """
-        Mencatat pembayaran kasir untuk pesanan laundry tertentu (Tunai / QRIS / Transfer).
-        """
-        if request.httprequest.method == 'OPTIONS':
-            return self._json_response({'status': 'ok'})
-
-        try:
-            user = self._get_authenticated_user(request, session_store_fn=session_store)
-            if not user:
-                return self._json_response({
-                    'success': False,
-                    'message': 'Autentikasi diperlukan. Akses tidak diizinkan.',
-                }, status=401)
-
-            if user.has_group('base.group_portal'):
-                return self._json_response({
-                    'success': False,
-                    'message': 'Akses ditolak: Hanya kasir atau staf yang dapat mencatat pembayaran.',
-                }, status=403)
-
-            order = request.env['laundry.order'].with_user(user).browse(order_id)
-            if not order.exists():
-                return self._json_response({
-                    'success': False,
-                    'message': f'Pesanan dengan ID {order_id} tidak ditemukan.',
-                }, status=404)
-
-            try:
-                raw_data = request.httprequest.data
-                body = json.loads(raw_data.decode('utf-8')) if raw_data else {}
-            except Exception:
-                return self._json_response({
-                    'success': False,
-                    'message': 'Format JSON payload tidak valid.',
-                }, status=400)
-
-            payment_method = str(body.get('payment_method') or 'cash').strip()
-            tot = float(order.total_amount or 0.0)
-            amount_paid_raw = body.get('amount_paid')
-            try:
-                amount_paid = float(amount_paid_raw) if amount_paid_raw is not None else tot
-            except (ValueError, TypeError):
-                amount_paid = tot
-
-            reference = str(body.get('reference') or '').strip()
-            notes = str(body.get('notes') or '').strip()
-
-            change_amount = max(0.0, amount_paid - tot)
-            amount_due = max(0.0, tot - amount_paid)
-            pay_status = 'paid' if amount_due == 0.0 else ('partial' if amount_paid > 0 else 'unpaid')
-
-            # Log to order notes or chatter
-            msg = f"<b>Pembayaran Kasir Dicatat</b><br/>" \
-                  f"Metode: {payment_method.upper()}<br/>" \
-                  f"Nominal Bayar: Rp {int(amount_paid):,}<br/>" \
-                  f"Total Tagihan: Rp {int(tot):,}<br/>"
-            if change_amount > 0:
-                msg += f"Kembalian: Rp {int(change_amount):,}<br/>"
-            if amount_due > 0:
-                msg += f"Sisa Tagihan: Rp {int(amount_due):,}<br/>"
-            if reference:
-                msg += f"Ref: {reference}<br/>"
-            if notes:
-                msg += f"Catatan: {notes}<br/>"
-
-            try:
-                order.message_post(body=msg, subtype_xmlid='mail.mt_note')
-            except Exception:
-                pass
-
-            inv = getattr(order, 'invoice_id', None)
-            inv_number = inv.name if (inv and inv.exists() and inv.name) else f"INV/{order.name}"
-
-            return self._json_response({
-                'success': True,
-                'message': 'Pembayaran berhasil dicatat.',
-                'data': {
-                    'id': inv.id if (inv and inv.exists()) else order.id,
-                    'order_id': order.id,
-                    'order_number': order.name,
-                    'invoice_number': inv_number,
-                    'state': 'posted',
-                    'payment_status': pay_status,
-                    'total_amount': tot,
-                    'amount_paid': amount_paid,
-                    'amount_due': amount_due,
-                    'change_amount': change_amount,
-                    'payment_method': payment_method,
-                    'payment_reference': reference,
-                    'payment_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    'currency': order.currency_id.name if order.currency_id else 'IDR',
-                }
-            }, status=200)
-
-        except Exception as e:
-            _logger.exception("Error in record_order_payment: %s", str(e))
             return self._json_response({
                 'success': False,
                 'message': 'Terjadi kesalahan pada server.',
@@ -908,6 +773,163 @@ class OrderApiController(BaseApiController):
             return self._json_response({
                 'success': False,
                 'message': 'Terjadi kesalahan pada server.',
+            }, status=500)
+
+    @http.route(
+        [
+            '/api/orders/<int:order_id>/delivery',
+            '/api/laundry/orders/<int:order_id>/delivery',
+        ],
+        type='http',
+        auth='public',
+        methods=['PATCH', 'PUT', 'OPTIONS'],
+        csrf=False,
+    )
+    def update_order_delivery(self, order_id, **kwargs):
+        """
+        PATCH /api/orders/<int:order_id>/delivery
+        Endpoint untuk memperbarui opsi pengantaran / pengambilan (fulfillment) pesanan:
+        - delivery_type: 'pickup' | 'delivery'
+        - delivery_address: Alamat tujuan pengantaran
+        - delivery_fee: Biaya ongkos kirim (otomatis update total_amount & amount_due)
+        - notes: Catatan khusus pengantaran (opsional)
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return self._json_response({'status': 'ok'})
+
+        try:
+            # 1. Autentikasi
+            user = self._get_authenticated_user(request, session_store_fn=session_store)
+            if not user:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Autentikasi diperlukan. Akses tidak diizinkan.',
+                }, status=401)
+
+            # 2. Otorisasi (Internal users / Staf Kasir / Admin)
+            if user.has_group('base.group_portal') or not user.has_group('base.group_user'):
+                return self._json_response({
+                    'success': False,
+                    'message': 'Akses ditolak: Hanya kasir atau staf internal yang berwenang memperbarui pengantaran.',
+                }, status=403)
+
+            # 3. Parse JSON Body
+            try:
+                raw_data = request.httprequest.data
+                body = json.loads(raw_data.decode('utf-8')) if raw_data else {}
+            except Exception:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Format payload JSON tidak valid.',
+                }, status=400)
+
+            # 4. Ambil order dengan row-level lock
+            request.env.cr.execute("SELECT id FROM laundry_order WHERE id = %s FOR UPDATE", [order_id])
+            order = request.env['laundry.order'].with_user(user).browse(order_id)
+            if not order.exists():
+                return self._json_response({
+                    'success': False,
+                    'message': f"Pesanan dengan ID {order_id} tidak ditemukan.",
+                }, status=404)
+
+            # 5. Cek status order
+            if order.state in ['completed', 'cancelled']:
+                return self._json_response({
+                    'success': False,
+                    'message': f"Pengantaran tidak dapat diubah karena pesanan sudah berstatus '{order.state}'.",
+                }, status=400)
+
+            vals_to_update = {}
+
+            # delivery_type
+            delivery_type_input = body.get('delivery_type') or body.get('fulfillment')
+            if delivery_type_input is not None:
+                dt = str(delivery_type_input).strip().lower()
+                if dt not in ['pickup', 'delivery']:
+                    return self._json_response({
+                        'success': False,
+                        'message': "delivery_type harus bernilai 'pickup' atau 'delivery'.",
+                    }, status=400)
+
+                if order.state == 'out_for_delivery' and dt == 'pickup':
+                    return self._json_response({
+                        'success': False,
+                        'message': "Pesanan sedang dalam proses pengantaran (out_for_delivery), tidak dapat diubah ke pickup.",
+                    }, status=400)
+
+                vals_to_update['delivery_type'] = dt
+                if dt == 'pickup' and 'delivery_fee' not in body:
+                    vals_to_update['delivery_fee'] = 0.0
+
+            # delivery_address
+            if 'delivery_address' in body:
+                vals_to_update['delivery_address'] = str(body['delivery_address'] or '').strip()
+            elif delivery_type_input == 'delivery' and not order.delivery_address:
+                partner_addr = order.partner_id.contact_address or ''
+                if partner_addr:
+                    vals_to_update['delivery_address'] = partner_addr
+
+            # delivery_fee
+            if 'delivery_fee' in body:
+                try:
+                    fee = max(0.0, float(body['delivery_fee'] or 0.0))
+                    vals_to_update['delivery_fee'] = fee
+                except (ValueError, TypeError):
+                    return self._json_response({
+                        'success': False,
+                        'message': "Nominal 'delivery_fee' harus berupa angka yang valid.",
+                    }, status=400)
+
+            # notes
+            if 'notes' in body and body['notes'] is not None:
+                vals_to_update['notes'] = body['notes']
+
+            if not vals_to_update:
+                return self._json_response({
+                    'success': False,
+                    'message': "Tidak ada data perubahan pengantaran yang diberikan.",
+                }, status=400)
+
+            order.write(vals_to_update)
+
+            stages, next_status = self._compute_order_stages_and_next(order)
+            partner_phone = getattr(order.partner_id, 'phone', None) or getattr(order.partner_id, 'mobile', None) or order.whatsapp_phone or ''
+            partner_address = order.partner_id.contact_address or ''
+            delivery_address = getattr(order, 'delivery_address', None) or partner_address
+
+            return self._json_response({
+                'success': True,
+                'message': 'Informasi pengantaran pesanan berhasil diperbarui.',
+                'data': {
+                    'id': order.id,
+                    'order_number': order.name,
+                    'delivery_type': getattr(order, 'delivery_type', 'pickup') or 'pickup',
+                    'delivery_address': delivery_address,
+                    'delivery_fee': float(getattr(order, 'delivery_fee', 0.0) or 0.0),
+                    'total_amount': float(order.total_amount or 0.0),
+                    'amount_paid': float(getattr(order, 'amount_paid', 0.0) or 0.0),
+                    'amount_due': float(getattr(order, 'amount_due', 0.0) or 0.0),
+                    'state': order.state,
+                    'stages': stages,
+                    'next_status': next_status,
+                }
+            }, status=200)
+
+        except (ValidationError, UserError) as ve:
+            return self._json_response({
+                'success': False,
+                'message': str(ve),
+            }, status=400)
+        except AccessError:
+            return self._json_response({
+                'success': False,
+                'message': 'Akses ditolak: Anda tidak memiliki izin untuk mengubah pesanan ini.',
+            }, status=403)
+        except Exception as e:
+            _logger.exception("Error in update_order_delivery: %s", str(e))
+            return self._json_response({
+                'success': False,
+                'message': 'Terjadi kesalahan pada server saat memperbarui pengantaran pesanan.',
             }, status=500)
 
     @http.route(
@@ -1266,6 +1288,245 @@ class OrderApiController(BaseApiController):
                 'success': False,
                 'message': 'Terjadi kesalahan pada server saat mempratinjau pesan WhatsApp.',
             }, status=500)
+
+    @http.route(
+        [
+            '/api/orders/<int:order_id>/invoice',
+            '/api/laundry/orders/<int:order_id>/invoice',
+            '/api/invoices/<int:order_id>',
+        ],
+        type='http',
+        auth='public',
+        methods=['GET', 'OPTIONS'],
+        csrf=False,
+    )
+    def get_order_invoice(self, order_id, **kwargs):
+        """
+        Mengembalikan data faktur / nota transaksi (invoice) lengkap untuk satu pesanan tertentu.
+        Menghilangkan kebutuhan mock data di Flutter InvoiceSection.
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return self._json_response({'status': 'ok'})
+
+        try:
+            user = self._get_authenticated_user(request, session_store_fn=session_store)
+            if not user:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Autentikasi diperlukan. Akses tidak diizinkan.',
+                }, status=401)
+
+            order = request.env['laundry.order'].with_user(user).browse(order_id)
+            if not order.exists():
+                return self._json_response({
+                    'success': False,
+                    'message': f"Pesanan dengan ID {order_id} tidak ditemukan.",
+                }, status=404)
+
+            # Pelanggan portal hanya boleh melihat invoice miliknya sendiri
+            if user.has_group('base.group_portal') and order.partner_id.id != user.partner_id.id:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Akses ditolak: Anda hanya dapat melihat nota pesanan milik Anda sendiri.',
+                }, status=403)
+
+            lines_data = []
+            for line in order.line_ids:
+                lines_data.append({
+                    'id': line.id,
+                    'product_id': line.product_template_id.id,
+                    'product_name': line.product_template_id.name,
+                    'pricing_type': line.pricing_type,
+                    'uom': line.uom_id.name if line.uom_id else '',
+                    'quantity': line.quantity,
+                    'weight': line.weight,
+                    'length': line.length,
+                    'width': line.width,
+                    'area': line.area,
+                    'price_unit': line.price_unit,
+                    'subtotal': line.subtotal,
+                    'item_details': line.item_details or '',
+                })
+
+            subtotal_services = sum(line.subtotal for line in order.line_ids)
+            inv_number = order.invoice_id.name if order.invoice_id else f"INV/{order.name}"
+
+            partner_phone = getattr(order.partner_id, 'phone', None) or getattr(order.partner_id, 'mobile', None) or order.whatsapp_phone or ''
+            partner_address = order.partner_id.contact_address or ''
+            delivery_address = getattr(order, 'delivery_address', None) or partner_address
+
+            return self._json_response({
+                'success': True,
+                'data': {
+                    'invoice_number': inv_number,
+                    'order_id': order.id,
+                    'order_number': order.name,
+                    'invoice_date': order.order_date.isoformat() if order.order_date else None,
+                    'customer': {
+                        'id': order.partner_id.id,
+                        'name': order.partner_id.name,
+                        'phone': partner_phone,
+                        'address': partner_address,
+                    },
+                    'service_speed': order.service_speed,
+                    'service_speed_fee': float(order.service_speed_fee or 0.0),
+                    'delivery_type': getattr(order, 'delivery_type', 'pickup') or 'pickup',
+                    'delivery_address': delivery_address,
+                    'delivery_fee': float(getattr(order, 'delivery_fee', 0.0) or 0.0),
+                    'subtotal_services': float(subtotal_services),
+                    'total_amount': float(order.total_amount or 0.0),
+                    'amount_paid': float(getattr(order, 'amount_paid', 0.0) or 0.0),
+                    'amount_due': float(getattr(order, 'amount_due', 0.0) or 0.0),
+                    'change_amount': float(getattr(order, 'change_amount', 0.0) or 0.0),
+                    'payment_status': getattr(order, 'payment_status', 'unpaid') or 'unpaid',
+                    'payment_method': getattr(order, 'payment_method', None) or None,
+                    'payment_date': order.payment_date.strftime('%Y-%m-%d %H:%M:%S') if getattr(order, 'payment_date', None) else None,
+                    'payment_reference': getattr(order, 'payment_reference', None) or None,
+                    'state': order.state,
+                    'notes': order.notes or '',
+                    'lines': lines_data,
+                }
+            }, status=200)
+
+        except AccessError:
+            return self._json_response({
+                'success': False,
+                'message': 'Akses ditolak untuk pesanan ini.',
+            }, status=403)
+        except Exception as e:
+            _logger.exception("Error in get_order_invoice: %s", str(e))
+            return self._json_response({
+                'success': False,
+                'message': 'Terjadi kesalahan pada server saat memuat invoice.',
+            }, status=500)
+
+    @http.route(
+        [
+            '/api/orders/<int:order_id>/payment',
+            '/api/laundry/orders/<int:order_id>/payment',
+            '/api/orders/<int:order_id>/pay',
+        ],
+        type='http',
+        auth='public',
+        methods=['POST', 'OPTIONS'],
+        csrf=False,
+    )
+    def record_order_payment(self, order_id, **kwargs):
+        """
+        Mencatat pembayaran pesanan laundry (tunai/cash, QRIS, transfer bank).
+        Otomatis menghitung status lunas/sebagian, sisa tagihan, dan uang kembalian.
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return self._json_response({'status': 'ok'})
+
+        try:
+            # 1. Autentikasi
+            user = self._get_authenticated_user(request, session_store_fn=session_store)
+            if not user:
+                return self._json_response({
+                    'success': False,
+                    'message': 'Autentikasi diperlukan. Akses tidak diizinkan.',
+                }, status=401)
+
+            # 2. Otorisasi (Hanya staf internal / kasir yang boleh mencatat pembayaran)
+            if user.has_group('base.group_portal') or not user.has_group('base.group_user'):
+                return self._json_response({
+                    'success': False,
+                    'message': 'Akses ditolak: Hanya kasir atau staf internal yang berwenang mencatat pembayaran.',
+                }, status=403)
+
+            # 3. Parse JSON Body
+            body = {}
+            if request.httprequest.data:
+                try:
+                    body = json.loads(request.httprequest.data.decode('utf-8'))
+                except Exception:
+                    return self._json_response({
+                        'success': False,
+                        'message': 'Format payload JSON tidak valid.',
+                    }, status=400)
+
+            # 4. Cari Pesanan
+            order = request.env['laundry.order'].with_user(user).browse(order_id)
+            if not order.exists():
+                return self._json_response({
+                    'success': False,
+                    'message': f"Pesanan dengan ID {order_id} tidak ditemukan.",
+                }, status=404)
+
+            # 5. Validasi Parameter Pembayaran
+            method = (body.get('payment_method') or body.get('method') or '').strip().lower()
+            if not method:
+                return self._json_response({
+                    'success': False,
+                    'message': "Parameter 'payment_method' wajib diisi (pilihan: cash, qris, transfer).",
+                }, status=400)
+
+            amount_paid_raw = body.get('amount_paid') or body.get('amount')
+            amount_paid = None
+            if amount_paid_raw is not None:
+                try:
+                    amount_paid = float(amount_paid_raw)
+                except (ValueError, TypeError):
+                    return self._json_response({
+                        'success': False,
+                        'message': "Nominal 'amount_paid' harus berupa angka yang valid.",
+                    }, status=400)
+
+            payment_reference = body.get('reference') or body.get('payment_reference')
+            notes = body.get('notes')
+
+            # 6. Eksekusi Pencatatan Pembayaran
+            res = order.action_record_payment(
+                payment_method=method,
+                amount_paid=amount_paid,
+                payment_reference=payment_reference,
+                notes=notes,
+            )
+
+            # Opsional generate account.move jika belum dibuat
+            try:
+                order.action_generate_invoice()
+            except Exception as ie:
+                _logger.warning("Auto invoice generate note: %s", str(ie))
+
+            inv_number = order.invoice_id.name if order.invoice_id else f"INV/{order.name}"
+
+            return self._json_response({
+                'success': True,
+                'message': f"Pembayaran {method.upper()} sebesar Rp {res['amount_paid']:,.0f} berhasil dicatat.",
+                'data': {
+                    'invoice_number': inv_number,
+                    'order_id': order.id,
+                    'order_number': order.name,
+                    'total_amount': res['total_amount'],
+                    'amount_paid': res['amount_paid'],
+                    'amount_due': res['amount_due'],
+                    'change_amount': res['change_amount'],
+                    'payment_status': res['payment_status'],
+                    'payment_method': res['payment_method'],
+                    'payment_date': res['payment_date'],
+                    'payment_reference': res['payment_reference'],
+                }
+            }, status=200)
+
+        except (ValidationError, UserError) as ve:
+            return self._json_response({
+                'success': False,
+                'message': str(ve),
+            }, status=400)
+        except AccessError:
+            return self._json_response({
+                'success': False,
+                'message': 'Akses ditolak: Anda tidak memiliki izin untuk transaksi ini.',
+            }, status=403)
+        except Exception as e:
+            _logger.exception("Error in record_order_payment: %s", str(e))
+            return self._json_response({
+                'success': False,
+                'message': 'Terjadi kesalahan pada server saat mencatat pembayaran.',
+            }, status=500)
+
 
 
 
