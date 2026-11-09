@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
 class AppTheme {
-  // Common Font Fallbacks
+  // Common Font Fallbacks for Commercial POS clarity
   static const List<String> _fontFamilyFallback = [
+    'Plus Jakarta Sans',
     'Inter',
     'Roboto',
     'Segoe UI',
@@ -11,58 +12,66 @@ class AppTheme {
   ];
 
   static ThemeData light() {
-    final colorScheme = ColorScheme(
+    const colorScheme = ColorScheme(
       brightness: Brightness.light,
       primary: AppColors.primary,
       onPrimary: Colors.white,
       primaryContainer: AppColors.primaryContainerLight,
       onPrimaryContainer: AppColors.primaryDark,
-      secondary: AppColors.neutralDark,
+      secondary: AppColors.indigo,
       onSecondary: Colors.white,
-      secondaryContainer: AppColors.neutralLight,
-      onSecondaryContainer: AppColors.lightTextPrimary,
+      secondaryContainer: AppColors.indigoLight,
+      onSecondaryContainer: AppColors.indigoDark,
+      tertiary: AppColors.teal,
+      onTertiary: Colors.white,
+      tertiaryContainer: AppColors.tealLight,
+      onTertiaryContainer: AppColors.tealDark,
       surface: AppColors.lightSurface,
       onSurface: AppColors.lightTextPrimary,
       surfaceContainerLowest: AppColors.lightSurface,
       surfaceContainerLow: AppColors.lightBg,
       surfaceContainer: AppColors.lightSurfaceElevated,
-      surfaceContainerHigh: const Color(0xFFE2E8F0),
-      surfaceContainerHighest: const Color(0xFFCBD5E1),
+      surfaceContainerHigh: Color(0xFFDCE5F2),
+      surfaceContainerHighest: Color(0xFFCBD5E1),
       error: AppColors.danger,
       onError: Colors.white,
       errorContainer: AppColors.dangerLight,
       onErrorContainer: AppColors.dangerText,
       outline: AppColors.lightBorder,
-      outlineVariant: const Color(0xFFE2E8F0),
+      outlineVariant: Color(0xFFE2E8F0),
     );
 
     return _buildTheme(colorScheme, isDark: false);
   }
 
   static ThemeData dark() {
-    final colorScheme = ColorScheme(
+    const colorScheme = ColorScheme(
       brightness: Brightness.dark,
       primary: AppColors.primaryLight,
       onPrimary: Colors.white,
       primaryContainer: AppColors.primaryContainerDark,
       onPrimaryContainer: Colors.white,
-      secondary: AppColors.darkTextSecondary,
+      secondary: AppColors.indigoGlow,
       onSecondary: Colors.white,
       secondaryContainer: AppColors.darkSurfaceElevated,
       onSecondaryContainer: AppColors.darkTextPrimary,
+      tertiary: AppColors.tealGlow,
+      onTertiary: AppColors.darkBg,
+      tertiaryContainer: AppColors.tealDark,
+      onTertiaryContainer: AppColors.tealLight,
       surface: AppColors.darkSurface,
       onSurface: AppColors.darkTextPrimary,
       surfaceContainerLowest: AppColors.darkBg,
-      surfaceContainerLow: const Color(0xFF131D31),
+      surfaceContainerLow: Color(0xFF101829),
       surfaceContainer: AppColors.darkSurfaceElevated,
-      surfaceContainerHigh: const Color(0xFF3B4861),
-      surfaceContainerHighest: const Color(0xFF475569),
+      surfaceContainerHigh: Color(0xFF283753),
+      surfaceContainerHighest: Color(0xFF334463),
       error: AppColors.danger,
       onError: Colors.white,
       errorContainer: AppColors.dangerDark,
-      onErrorContainer: const Color(0xFFFCA5A5),
+      onErrorContainer: Color(0xFFFCA5A5),
       outline: AppColors.darkBorder,
-      outlineVariant: const Color(0xFF334155),
+      outlineVariant: Color(0xFF334155),
     );
 
     return _buildTheme(colorScheme, isDark: true);
@@ -78,52 +87,53 @@ class AppTheme {
     final textTheme = baseTextTheme.copyWith(
       displayMedium: TextStyle(
         fontSize: 26,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w800,
         color: textPrimary,
         fontFamilyFallback: _fontFamilyFallback,
-        letterSpacing: -0.5,
+        letterSpacing: -0.6,
       ),
       headlineMedium: TextStyle(
         fontSize: 22,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w800,
         color: textPrimary,
         fontFamilyFallback: _fontFamilyFallback,
-        letterSpacing: -0.3,
+        letterSpacing: -0.4,
       ),
       titleLarge: TextStyle(
         fontSize: 18,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w700,
         color: textPrimary,
         fontFamilyFallback: _fontFamilyFallback,
+        letterSpacing: -0.2,
       ),
       titleMedium: TextStyle(
         fontSize: 15,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w700,
         color: textPrimary,
         fontFamilyFallback: _fontFamilyFallback,
       ),
       bodyLarge: TextStyle(
         fontSize: 14,
-        fontWeight: FontWeight.w400,
+        fontWeight: FontWeight.w500,
         color: textPrimary,
         fontFamilyFallback: _fontFamilyFallback,
         height: 1.4,
       ),
       bodyMedium: TextStyle(
         fontSize: 13,
-        fontWeight: FontWeight.w400,
+        fontWeight: FontWeight.w500,
         color: textSecondary,
         fontFamilyFallback: _fontFamilyFallback,
       ),
       bodySmall: TextStyle(
         fontSize: 12,
-        fontWeight: FontWeight.w400,
+        fontWeight: FontWeight.w500,
         color: textSecondary,
         fontFamilyFallback: _fontFamilyFallback,
       ),
       labelLarge: TextStyle(
         fontSize: 14,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w700,
         color: textPrimary,
         fontFamilyFallback: _fontFamilyFallback,
       ),
@@ -135,7 +145,7 @@ class AppTheme {
       ),
       labelSmall: TextStyle(
         fontSize: 11,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w700,
         color: textSecondary,
         fontFamilyFallback: _fontFamilyFallback,
         letterSpacing: 0.2,
@@ -149,20 +159,21 @@ class AppTheme {
       textTheme: textTheme,
       fontFamilyFallback: _fontFamilyFallback,
 
-      // AppBar Theme
+      // AppBar Theme — Commercial POS Style
       appBarTheme: AppBarTheme(
         elevation: 0,
         scrolledUnderElevation: 1,
-        backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        foregroundColor: textPrimary,
+        backgroundColor: isDark ? AppColors.darkSurface : AppColors.primary,
+        foregroundColor: Colors.white,
         centerTitle: false,
-        titleTextStyle: TextStyle(
+        titleTextStyle: const TextStyle(
           fontSize: 18,
-          fontWeight: FontWeight.w700,
-          color: textPrimary,
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
           fontFamilyFallback: _fontFamilyFallback,
+          letterSpacing: -0.3,
         ),
-        iconTheme: IconThemeData(color: textPrimary, size: 22),
+        iconTheme: const IconThemeData(color: Colors.white, size: 22),
       ),
 
       // Card Theme
@@ -171,8 +182,8 @@ class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: BorderSide(color: borderColor, width: 1),
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: borderColor, width: 1.2),
         ),
       ),
 
@@ -180,12 +191,12 @@ class AppTheme {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           minimumSize: const Size.fromHeight(48),
-          backgroundColor: cs.primary,
+          backgroundColor: isDark ? AppColors.primaryBright : AppColors.primary,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           textStyle: const TextStyle(
             fontSize: 14,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
             fontFamilyFallback: _fontFamilyFallback,
           ),
           elevation: 0,
@@ -195,71 +206,95 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           minimumSize: const Size.fromHeight(48),
           foregroundColor: textPrimary,
-          side: BorderSide(color: borderColor, width: 1.2),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          side: BorderSide(color: borderColor, width: 1.4),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           textStyle: const TextStyle(
             fontSize: 14,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
             fontFamilyFallback: _fontFamilyFallback,
           ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: cs.primary,
+          foregroundColor: isDark ? AppColors.primaryLight : AppColors.primaryBright,
           textStyle: const TextStyle(
             fontSize: 14,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
             fontFamilyFallback: _fontFamilyFallback,
           ),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       ),
 
       // Inputs
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        fillColor: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurface,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: borderColor, width: 1),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: borderColor, width: 1.2),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: borderColor, width: 1),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: borderColor, width: 1.2),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: cs.primary, width: 1.8),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color: isDark ? AppColors.primaryLight : AppColors.primaryBright,
+            width: 2.0,
+          ),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.danger, width: 1),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.danger, width: 1.2),
         ),
         hintStyle: TextStyle(
           color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-          fontSize: 14,
-          fontWeight: FontWeight.w400,
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
         ),
         labelStyle: TextStyle(
           color: textSecondary,
-          fontSize: 14,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+
+      // Chips
+      chipTheme: ChipThemeData(
+        backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        selectedColor: isDark
+            ? AppColors.primaryBright.withValues(alpha: 0.3)
+            : AppColors.primaryContainerLight,
+        side: BorderSide(color: borderColor, width: 1.2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        labelStyle: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: textPrimary,
+          fontFamilyFallback: _fontFamilyFallback,
         ),
       ),
 
       // Navigation Bar
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        indicatorColor: cs.primary.withValues(alpha: 0.15),
-        elevation: 0,
-        height: 64,
+        indicatorColor: isDark
+            ? AppColors.primaryLight.withValues(alpha: 0.22)
+            : AppColors.primaryContainerLight,
+        elevation: 8,
+        height: 68,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final isSelected = states.contains(WidgetState.selected);
           return TextStyle(
-            fontSize: 12,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            color: isSelected ? cs.primary : textSecondary,
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+            color: isSelected
+                ? (isDark ? AppColors.primaryLight : AppColors.primary)
+                : textSecondary,
             fontFamilyFallback: _fontFamilyFallback,
           );
         }),
@@ -267,7 +302,9 @@ class AppTheme {
           final isSelected = states.contains(WidgetState.selected);
           return IconThemeData(
             size: 22,
-            color: isSelected ? cs.primary : textSecondary,
+            color: isSelected
+                ? (isDark ? AppColors.primaryLight : AppColors.primary)
+                : textSecondary,
           );
         }),
       ),
@@ -282,14 +319,14 @@ class AppTheme {
       // Dialog Theme
       dialogTheme: DialogThemeData(
         backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        elevation: 4,
+        elevation: 8,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: borderColor, width: 1),
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: borderColor, width: 1.2),
         ),
         titleTextStyle: TextStyle(
           fontSize: 18,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w800,
           color: textPrimary,
           fontFamilyFallback: _fontFamilyFallback,
         ),
@@ -299,20 +336,19 @@ class AppTheme {
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
         modalBackgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        elevation: 8,
+        elevation: 12,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
       ),
 
       // Floating Action Button
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: cs.primary,
+        backgroundColor: AppColors.primaryBright,
         foregroundColor: Colors.white,
-        elevation: 3,
+        elevation: 4,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
     );
   }
 }
-

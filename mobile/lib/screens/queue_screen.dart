@@ -6,6 +6,7 @@ import '../repositories/order_repository.dart';
 import '../repositories/repositories.dart';
 import '../session.dart';
 import '../theme/app_colors.dart';
+import '../utils/format.dart';
 import '../widgets/order_tile.dart';
 import 'new_order_screen.dart';
 import 'order_detail_screen.dart';
@@ -13,7 +14,9 @@ import 'order_detail_screen.dart';
 typedef _QueueData = ({OrderSummary summary, List<Order> orders});
 
 class QueueScreen extends StatefulWidget {
-  const QueueScreen({super.key});
+  const QueueScreen({super.key, this.onNavigateTab});
+
+  final ValueChanged<int>? onNavigateTab;
 
   @override
   State<QueueScreen> createState() => _QueueScreenState();
@@ -107,325 +110,778 @@ class _QueueScreenState extends State<QueueScreen> {
     );
   }
 
+  IconData _stageIcon(OrderStatus s) {
+    return switch (s) {
+      OrderStatus.received => Icons.inventory_2_rounded,
+      OrderStatus.washing => Icons.local_laundry_service_rounded,
+      OrderStatus.drying => Icons.wb_sunny_rounded,
+      OrderStatus.ironing => Icons.iron_rounded,
+      OrderStatus.ready => Icons.check_circle_rounded,
+      OrderStatus.outForDelivery => Icons.delivery_dining_rounded,
+      _ => Icons.circle,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final user = currentUser.value;
+    final topPadding = MediaQuery.of(context).padding.top;
 
     return Scaffold(
-      // 1. Ultra-Clean & Compact App Bar (Online text removed as requested)
-      appBar: AppBar(
-        titleSpacing: 16,
-        title: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(10),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _newOrder,
+        backgroundColor: AppColors.primaryBright,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_shopping_cart_rounded, size: 20),
+        label: const Text(
+          'Transaksi Baru',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
+        ),
+        elevation: 5,
+      ),
+      body: Column(
+        children: [
+          // 1. Commercial Royal Blue-to-Indigo Hero Header + Integrated Search Bar
+          Container(
+            padding: EdgeInsets.fromLTRB(16, topPadding + 10, 16, 14),
+            decoration: BoxDecoration(
+              gradient: AppColors.heroGradient(isDark: isDark),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(24),
               ),
-              child: const Icon(
-                Icons.local_laundry_service,
-                color: Colors.white,
-                size: 20,
-              ),
+              boxShadow: [
+                BoxShadow(
+                  color: (isDark ? Colors.black : AppColors.primary)
+                      .withValues(alpha: isDark ? 0.45 : 0.22),
+                  blurRadius: 18,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
-            const SizedBox(width: 10),
-            Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'LaundryFlow',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+                // Top Brand & Cashier Row
+                Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.local_laundry_service_rounded,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 11),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'LaundryFlow POS',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 18,
+                              color: Colors.white,
+                              letterSpacing: -0.4,
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.badge_outlined,
+                                size: 12,
+                                color: Color(0xFFBFDBFE),
+                              ),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  user != null
+                                      ? 'Kasir: ${user.name}'
+                                      : 'Terminal Kasir Utama',
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFFDBEAFE),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Quick Refresh Action
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: IconButton(
+                        tooltip: 'Muat Ulang Antrian',
+                        constraints: const BoxConstraints(
+                          minWidth: 38,
+                          minHeight: 38,
+                        ),
+                        padding: EdgeInsets.zero,
+                        icon: const Icon(
+                          Icons.refresh_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        onPressed: _reload,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  user != null ? 'Kasir: ${user.name}' : 'Kasir Laundry',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+
+                const SizedBox(height: 12),
+
+                // Integrated High-Contrast Search Bar inside Hero Header
+                SizedBox(
+                  height: 42,
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: _onSearchChanged,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : AppColors.lightTextPrimary,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Cari nama pelanggan, no. nota (#LDR), atau HP...',
+                      hintStyle: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                        color: isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.search_rounded,
+                        size: 20,
+                        color: isDark ? AppColors.primaryLight : AppColors.primary,
+                      ),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.cancel_rounded, size: 18),
+                              onPressed: _clearSearch,
+                            )
+                          : null,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 0,
+                      ),
+                      filled: true,
+                      fillColor: isDark
+                          ? const Color(0xFF0F172A).withValues(alpha: 0.85)
+                          : Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.14)
+                              : Colors.white,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: AppColors.cyanBright,
+                          width: 2,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Muat Ulang',
-            icon: const Icon(Icons.refresh, size: 22),
-            onPressed: _reload,
           ),
-          const SizedBox(width: 4),
-        ],
-      ),
 
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _newOrder,
-        icon: const Icon(Icons.add, size: 20),
-        label: const Text(
-          'Pesanan Baru',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-        ),
-        elevation: 3,
-      ),
-
-      body: FutureBuilder<_QueueData>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline, size: 44, color: AppColors.danger),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Gagal memuat antrian: ${snapshot.error}',
-                      textAlign: TextAlign.center,
-                      style: textTheme.bodyLarge,
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Coba Lagi'),
-                      onPressed: _reload,
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          final data = snapshot.data!;
-          final summary = data.summary;
-          final orders = data.orders;
-          final readyCount = summary.byStatus[OrderStatus.ready] ?? 0;
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 8),
-
-              // 2. Space-Efficient Single-Row KPI Metric Bar (Compact ~44px height)
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    _CompactKpiChip(
-                      label: 'Antrian',
-                      value: summary.active,
-                      icon: Icons.inventory_2_outlined,
-                      color: AppColors.primary,
-                      isSelected: _status == null,
-                      isDark: isDark,
-                      onTap: () => _setStatus(null),
-                    ),
-                    const SizedBox(width: 8),
-                    _CompactKpiChip(
-                      label: 'Siap Diambil',
-                      value: readyCount,
-                      icon: Icons.check_circle_outline,
-                      color: AppColors.success,
-                      isSelected: _status == OrderStatus.ready,
-                      isDark: isDark,
-                      onTap: () => _setStatus(OrderStatus.ready),
-                    ),
-                    const SizedBox(width: 8),
-                    _CompactKpiChip(
-                      label: 'Kilat',
-                      value: summary.express,
-                      icon: Icons.bolt,
-                      color: AppColors.warning,
-                      isSelected: false,
-                      isDark: isDark,
-                      onTap: () => _setStatus(null),
-                    ),
-                    const SizedBox(width: 8),
-                    _CompactKpiChip(
-                      label: 'Terlambat',
-                      value: summary.overdue,
-                      icon: Icons.alarm_outlined,
-                      color: summary.overdue > 0 ? AppColors.danger : AppColors.neutral,
-                      isSelected: false,
-                      isDark: isDark,
-                      onTap: () => _setStatus(null),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              // 3. Compact Search Bar in Queue (Comfortable searching, no cramped feeling)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: SizedBox(
-                  height: 40,
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: _onSearchChanged,
-                    style: const TextStyle(fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Cari nama, no. nota, atau nomor HP...',
-                      hintStyle: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                      ),
-                      prefixIcon: const Icon(Icons.search, size: 18),
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear, size: 16),
-                              onPressed: _clearSearch,
-                            )
-                          : null,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                      filled: true,
-                      fillColor: isDark ? AppColors.darkSurfaceElevated : Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(
-                          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-                        ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(
-                          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 6),
-
-              // 4. Compact Stage Filter Pills
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Row(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: ChoiceChip(
-                        label: Text('Semua (${summary.active})'),
-                        labelStyle: TextStyle(
-                          fontSize: 11,
-                          fontWeight: _status == null ? FontWeight.w700 : FontWeight.w500,
-                        ),
-                        selected: _status == null,
-                        visualDensity: VisualDensity.compact,
-                        onSelected: (_) => _setStatus(null),
-                      ),
-                    ),
-                    for (final s in _stages)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: ChoiceChip(
-                          label: Text('${s.label} (${summary.byStatus[s] ?? 0})'),
-                          labelStyle: TextStyle(
-                            fontSize: 11,
-                            fontWeight: _status == s ? FontWeight.w700 : FontWeight.w500,
+          // 2. Main Operational Body
+          Expanded(
+            child: FutureBuilder<_QueueData>(
+              future: _future,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.error_outline_rounded,
+                            size: 48,
+                            color: AppColors.danger,
                           ),
-                          selected: _status == s,
-                          visualDensity: VisualDensity.compact,
-                          onSelected: (_) => _setStatus(s),
-                        ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Gagal memuat antrian: ${snapshot.error}',
+                            textAlign: TextAlign.center,
+                            style: textTheme.bodyLarge,
+                          ),
+                          const SizedBox(height: 16),
+                          FilledButton.icon(
+                            icon: const Icon(Icons.refresh_rounded),
+                            label: const Text('Coba Lagi'),
+                            onPressed: _reload,
+                          ),
+                        ],
                       ),
-                  ],
-                ),
-              ),
+                    ),
+                  );
+                }
 
-              const SizedBox(height: 4),
+                final data = snapshot.data!;
+                final summary = data.summary;
+                final orders = data.orders;
+                final readyCount = summary.byStatus[OrderStatus.ready] ?? 0;
+                final activeTotalNominal =
+                    orders.fold<int>(0, (sum, o) => sum + o.total);
+                final unpaidCount = orders.where((o) => !o.isPaid).length;
 
-              // 5. Orders Stream / List (Takes up 75%+ of viewport!)
-              Expanded(
-                child: RefreshIndicator(
+                return RefreshIndicator(
                   onRefresh: () async {
                     _reload();
                     await _future;
                   },
-                  child: orders.isEmpty
-                      ? ListView(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          children: [
-                            const SizedBox(height: 48),
-                            Center(
-                              child: Container(
-                                width: 64,
-                                height: 64,
-                                decoration: BoxDecoration(
-                                  color: isDark
-                                      ? AppColors.darkSurfaceElevated
-                                      : AppColors.lightSurfaceElevated,
-                                  shape: BoxShape.circle,
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      // Operational Bento Overview + Quick Actions + Stage Pipeline
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // A. Colorful 2x2 Operational Bento Grid (Compact when searching)
+                              if (_searchQuery.isEmpty) ...[
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  child: Column(
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: _BentoMetricTile(
+                                              label: 'Antrian Aktif',
+                                              subtitle: 'Sedang diproses',
+                                              value: '${summary.active}',
+                                              unit: 'Nota',
+                                              icon: Icons.inventory_2_rounded,
+                                              accent: AppColors.indigo,
+                                              bgTint: isDark
+                                                  ? AppColors.indigoDark
+                                                      .withValues(alpha: 0.45)
+                                                  : AppColors.indigoLight,
+                                              isSelected: _status == null,
+                                              isDark: isDark,
+                                              onTap: () => _setStatus(null),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: _BentoMetricTile(
+                                              label: 'Siap Diambil',
+                                              subtitle: 'Menunggu serah terima',
+                                              value: '$readyCount',
+                                              unit: 'Nota',
+                                              icon: Icons.check_circle_rounded,
+                                              accent: AppColors.teal,
+                                              bgTint: isDark
+                                                  ? AppColors.tealDark
+                                                      .withValues(alpha: 0.45)
+                                                  : AppColors.tealLight,
+                                              isSelected:
+                                                  _status == OrderStatus.ready,
+                                              isDark: isDark,
+                                              onTap: () =>
+                                                  _setStatus(OrderStatus.ready),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: _BentoMetricTile(
+                                              label: 'Layanan Kilat',
+                                              subtitle: 'Prioritas Same Day',
+                                              value: '${summary.express}',
+                                              unit: 'Nota',
+                                              icon: Icons.bolt_rounded,
+                                              accent: AppColors.warmOrangeBright,
+                                              bgTint: isDark
+                                                  ? AppColors.warmOrangeDark
+                                                      .withValues(alpha: 0.45)
+                                                  : AppColors.warmOrangeLight,
+                                              isSelected: false,
+                                              isDark: isDark,
+                                              onTap: () => _setStatus(null),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: _BentoMetricTile(
+                                              label: summary.overdue > 0
+                                                  ? 'Perlu Perhatian'
+                                                  : 'Nilai Antrian',
+                                              subtitle: summary.overdue > 0
+                                                  ? 'Lewat tenggat waktu'
+                                                  : '$unpaidCount belum lunas',
+                                              value: summary.overdue > 0
+                                                  ? '${summary.overdue}'
+                                                  : formatRupiah(activeTotalNominal),
+                                              unit: summary.overdue > 0 ? 'Telat' : '',
+                                              icon: summary.overdue > 0
+                                                  ? Icons.warning_amber_rounded
+                                                  : Icons.payments_rounded,
+                                              accent: summary.overdue > 0
+                                                  ? AppColors.danger
+                                                  : AppColors.violet,
+                                              bgTint: summary.overdue > 0
+                                                  ? (isDark
+                                                      ? AppColors.dangerDark
+                                                          .withValues(alpha: 0.45)
+                                                      : AppColors.dangerLight)
+                                                  : (isDark
+                                                      ? AppColors.violetDark
+                                                          .withValues(alpha: 0.45)
+                                                      : AppColors.violetLight),
+                                              isSelected: false,
+                                              isDark: isDark,
+                                              onTap: () => _setStatus(null),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                child: Icon(
-                                  Icons.assignment_turned_in_outlined,
-                                  size: 32,
-                                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                                const SizedBox(height: 12),
+
+                                // B. Quick Cashier Action Bar
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: _QuickActionPill(
+                                          icon: Icons.add_circle_rounded,
+                                          label: 'Buat Nota',
+                                          color: AppColors.primaryBright,
+                                          isDark: isDark,
+                                          onTap: _newOrder,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: _QuickActionPill(
+                                          icon: Icons.people_alt_rounded,
+                                          label: 'Pelanggan',
+                                          color: AppColors.teal,
+                                          isDark: isDark,
+                                          onTap: () =>
+                                              widget.onNavigateTab?.call(3),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: _QuickActionPill(
+                                          icon: Icons.receipt_long_rounded,
+                                          label: 'Semua Nota',
+                                          color: AppColors.violet,
+                                          isDark: isDark,
+                                          onTap: () =>
+                                              widget.onNavigateTab?.call(1),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+
+                              // C. Workflow Pipeline Strip (Interactive Stage Selector)
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: Row(
+                                  children: [
+                                    _PipelineStagePill(
+                                      label: 'Semua Tahap',
+                                      count: summary.active,
+                                      icon: Icons.apps_rounded,
+                                      color: AppColors.primaryBright,
+                                      isSelected: _status == null,
+                                      isDark: isDark,
+                                      onTap: () => _setStatus(null),
+                                    ),
+                                    for (final s in _stages) ...[
+                                      const SizedBox(width: 8),
+                                      _PipelineStagePill(
+                                        label: s.label,
+                                        count: summary.byStatus[s] ?? 0,
+                                        icon: _stageIcon(s),
+                                        color: AppColors.stageStyle(
+                                          s,
+                                          isDark: isDark,
+                                        ).icon,
+                                        isSelected: _status == s,
+                                        isDark: isDark,
+                                        onTap: () => _setStatus(s),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 12),
-                            Center(
-                              child: Text(
-                                _searchQuery.isNotEmpty
-                                    ? 'Tidak ada pesanan cocok dengan "$_searchQuery"'
-                                    : (_status == null
-                                        ? 'Tidak ada antrian cucian aktif'
-                                        : 'Tidak ada pesanan dengan status ${_status!.label}'),
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
+
+                              const SizedBox(height: 10),
+
+                              // Section Header Row
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 18),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          width: 4,
+                                          height: 16,
+                                          decoration: BoxDecoration(
+                                            color: AppColors.primaryBright,
+                                            borderRadius: BorderRadius.circular(2),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 7),
+                                        Text(
+                                          _status == null
+                                              ? 'Daftar Antrian Aktif'
+                                              : 'Tahap: ${_status!.label}',
+                                          style: textTheme.titleMedium?.copyWith(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    Text(
+                                      '${orders.length} pesanan',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: isDark
+                                            ? AppColors.darkTextSecondary
+                                            : AppColors.lightTextSecondary,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Center(
-                              child: Text(
-                                _searchQuery.isNotEmpty
-                                    ? 'Coba gunakan kata kunci nama atau nomor lain.'
-                                    : 'Pesanan baru akan otomatis muncul di sini.',
-                                style: textTheme.bodySmall?.copyWith(fontSize: 12),
-                              ),
-                            ),
-                          ],
-                        )
-                      : ListView.builder(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.only(top: 2, bottom: 84),
-                          itemCount: orders.length,
-                          itemBuilder: (context, index) => OrderTile(
-                            order: orders[index],
-                            onTap: () => _openDetail(orders[index]),
+                              const SizedBox(height: 4),
+                            ],
                           ),
                         ),
-                ),
-              ),
-            ],
-          );
-        },
+                      ),
+
+                      // D. Orders Stream / Empty State
+                      if (orders.isEmpty)
+                        SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: Padding(
+                            padding: const EdgeInsets.all(32),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  width: 68,
+                                  height: 68,
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? AppColors.darkSurfaceElevated
+                                        : AppColors.primaryContainerLight,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.assignment_turned_in_rounded,
+                                    size: 34,
+                                    color: isDark
+                                        ? AppColors.primaryLight
+                                        : AppColors.primary,
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                Text(
+                                  _searchQuery.isNotEmpty
+                                      ? 'Tidak ada pesanan cocok dengan "$_searchQuery"'
+                                      : (_status == null
+                                          ? 'Antrian Cucian Bersih!'
+                                          : 'Belum ada pesanan di tahap ${_status!.label}'),
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _searchQuery.isNotEmpty
+                                      ? 'Coba cari menggunakan nama pelanggan atau nomor nota lain.'
+                                      : 'Ketuk tombol Transaksi Baru untuk mencatat cucian masuk.',
+                                  textAlign: TextAlign.center,
+                                  style: textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        SliverPadding(
+                          padding: const EdgeInsets.only(top: 2, bottom: 88),
+                          sliver: SliverList.builder(
+                            itemCount: orders.length,
+                            itemBuilder: (context, index) => OrderTile(
+                              order: orders[index],
+                              onTap: () => _openDetail(orders[index]),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-/// Compact Metric Chip (~38px height) saving substantial screen real estate
-class _CompactKpiChip extends StatelessWidget {
-  const _CompactKpiChip({
+/// Tactile Colorful Bento Metric Card (2x2 Grid)
+class _BentoMetricTile extends StatelessWidget {
+  const _BentoMetricTile({
     required this.label,
+    required this.subtitle,
     required this.value,
+    required this.unit,
+    required this.icon,
+    required this.accent,
+    required this.bgTint,
+    required this.isSelected,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final String label;
+  final String subtitle;
+  final String value;
+  final String unit;
+  final IconData icon;
+  final Color accent;
+  final Color bgTint;
+  final bool isSelected;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.darkSurface : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected
+                  ? accent
+                  : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
+              width: isSelected ? 2.0 : 1.2,
+            ),
+            boxShadow: AppColors.cardShadow(isDark: isDark),
+          ),
+          child: Row(
+            children: [
+              // Colored Icon Container
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: bgTint,
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(icon, size: 20, color: accent),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            value,
+                            style: TextStyle(
+                              fontSize: value.length > 6 ? 13.5 : 17,
+                              fontWeight: FontWeight.w800,
+                              color: isDark
+                                  ? Colors.white
+                                  : AppColors.lightTextPrimary,
+                              letterSpacing: -0.4,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (unit.isNotEmpty) ...[
+                          const SizedBox(width: 3),
+                          Text(
+                            unit,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: accent,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: isDark
+                            ? AppColors.darkTextPrimary
+                            : AppColors.lightTextPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                        color: isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Quick Cashier Action Pill
+class _QuickActionPill extends StatelessWidget {
+  const _QuickActionPill({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          decoration: BoxDecoration(
+            color: isDark
+                ? color.withValues(alpha: 0.16)
+                : color.withValues(alpha: 0.09),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: color.withValues(alpha: isDark ? 0.35 : 0.25),
+              width: 1.1,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.white : color,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Interactive Stage Pill in Workflow Pipeline Strip
+class _PipelineStagePill extends StatelessWidget {
+  const _PipelineStagePill({
+    required this.label,
+    required this.count,
     required this.icon,
     required this.color,
     required this.isSelected,
@@ -434,7 +890,7 @@ class _CompactKpiChip extends StatelessWidget {
   });
 
   final String label;
-  final int value;
+  final int count;
   final IconData icon;
   final Color color;
   final bool isSelected;
@@ -445,45 +901,66 @@ class _CompactKpiChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6.5),
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7.5),
           decoration: BoxDecoration(
+            gradient: isSelected ? AppColors.primaryActionGradient : null,
             color: isSelected
-                ? color.withValues(alpha: isDark ? 0.25 : 0.12)
+                ? null
                 : (isDark ? AppColors.darkSurface : Colors.white),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isSelected
-                  ? color
+                  ? Colors.transparent
                   : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
-              width: isSelected ? 1.8 : 1.0,
+              width: 1.2,
             ),
-            boxShadow: AppColors.cardShadow(isDark: isDark),
+            boxShadow: isSelected
+                ? AppColors.glowShadow(AppColors.primaryBright, isDark: isDark)
+                : null,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 15, color: color),
-              const SizedBox(width: 6),
-              Text(
-                '$value',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white : color,
-                ),
+              Icon(
+                icon,
+                size: 14,
+                color: isSelected ? Colors.white : color,
               ),
-              const SizedBox(width: 5),
+              const SizedBox(width: 6),
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected
+                      ? Colors.white
+                      : (isDark
+                          ? AppColors.darkTextPrimary
+                          : AppColors.lightTextPrimary),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? Colors.white.withValues(alpha: 0.22)
+                      : color.withValues(alpha: isDark ? 0.22 : 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    color: isSelected ? Colors.white : color,
+                  ),
                 ),
               ),
             ],
