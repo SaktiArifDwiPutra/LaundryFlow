@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:laundryflow/models/customer.dart';
 import 'package:laundryflow/models/invoice.dart';
 import 'package:laundryflow/models/order.dart';
+import 'package:laundryflow/models/order_option.dart';
 import 'package:laundryflow/models/order_status.dart';
 import 'package:laundryflow/models/service.dart';
 import 'package:laundryflow/models/service_speed.dart';
@@ -115,6 +116,28 @@ void main() {
       expect(order.lines.first.qty, 3.5);
       expect(order.lines.first.unit, 'kg');
       expect(order.stages.length, 6);
+    });
+
+    test('Order.fromJson parses delivery fields from backend response', () {
+      final json = {
+        'id': 492,
+        'name': 'LDR/2026/00537',
+        'state': 'received',
+        'partner_id': 12,
+        'partner_name': 'Budi Santoso',
+        'delivery_type': 'delivery',
+        'delivery_address': 'Jl. Mawar No. 10',
+        'delivery_fee': 10000,
+        'total_amount': 45000,
+        'stages': ['received', 'washing', 'drying', 'ironing', 'ready', 'out_for_delivery', 'completed'],
+        'next_status': 'washing',
+      };
+      final order = Order.fromJson(json);
+      expect(order.fulfillment, Fulfillment.delivery);
+      expect(order.delivery, isNotNull);
+      expect(order.delivery!.address, 'Jl. Mawar No. 10');
+      expect(order.delivery!.fee, 10000);
+      expect(order.stages.contains(OrderStatus.outForDelivery), isTrue);
     });
   });
 

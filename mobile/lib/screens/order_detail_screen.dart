@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../api/api_exception.dart';
 import '../models/order.dart';
 import '../models/order_option.dart';
 import '../models/order_status.dart';
@@ -129,6 +130,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       _toast(e.message);
     } on OrderValidationException catch (e) {
       _toast(e.message);
+    } on ApiException catch (e) {
+      _toast(e.message);
+    } catch (e) {
+      _toast('Gagal mengubah pengantaran: $e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }

@@ -68,8 +68,8 @@ class DeliveryInfo {
   factory DeliveryInfo.fromJson(Map<String, dynamic> json) {
     final courier = json['courier'];
     return DeliveryInfo(
-      address: (json['address'] as String?) ?? '',
-      fee: (json['fee'] as num?)?.round() ?? 0,
+      address: ((json['address'] ?? json['delivery_address']) as String?) ?? '',
+      fee: ((json['fee'] ?? json['delivery_fee'] ?? 0) as num).round(),
       courierName:
           courier is Map<String, dynamic> ? courier['name'] as String? : null,
     );
@@ -240,10 +240,18 @@ class Order {
       priority: OrderPriority.fromCode((json['service_speed'] ?? json['priority']) as String?),
       dueAt: dueAt,
       isOverdue: isOverdue,
-      fulfillment: Fulfillment.fromCode(json['fulfillment'] as String?),
-      delivery: json['delivery'] == null
-          ? null
-          : DeliveryInfo.fromJson(json['delivery'] as Map<String, dynamic>),
+      fulfillment: Fulfillment.fromCode(
+          (json['delivery_type'] ?? json['fulfillment']) as String?),
+      delivery: json['delivery'] != null
+          ? DeliveryInfo.fromJson(json['delivery'] as Map<String, dynamic>)
+          : ((json['delivery_type'] == 'delivery' ||
+                  ((json['delivery_fee'] ?? 0) as num) > 0 ||
+                  ((json['delivery_address'] as String?)?.trim().isNotEmpty == true))
+              ? DeliveryInfo(
+                  address: ((json['delivery_address'] ?? json['address']) as String?) ?? '',
+                  fee: ((json['delivery_fee'] ?? json['fee'] ?? 0) as num).round(),
+                )
+              : null),
       customer: customer,
       lines: (json['lines'] as List<dynamic>? ?? const [])
           .map((e) => OrderLine.fromJson(e as Map<String, dynamic>))

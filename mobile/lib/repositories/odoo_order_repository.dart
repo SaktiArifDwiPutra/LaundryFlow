@@ -146,9 +146,15 @@ class OdooOrderRepository implements OrderRepository {
       linesPayload.add(lineMap);
     }
 
+    final isDelivery = fulfillment == Fulfillment.delivery;
     final body = <String, dynamic>{
       'partner_id': customer.id,
       'service_speed': speedCode,
+      'delivery_type': isDelivery ? 'delivery' : 'pickup',
+      if (isDelivery && deliveryAddress.trim().isNotEmpty)
+        'delivery_address': deliveryAddress.trim(),
+      if (isDelivery && deliveryFee > 0)
+        'delivery_fee': deliveryFee,
       if (notes.trim().isNotEmpty) 'notes': notes.trim(),
       'lines': linesPayload,
     };
@@ -193,8 +199,23 @@ class OdooOrderRepository implements OrderRepository {
     String deliveryAddress = '',
     int deliveryFee = 0,
   }) async {
-    // Backend Odoo saat ini belum menyediakan endpoint terpisah untuk mutasi fulfillment.
-    // Kita tetap kembalikan pesanan terkini dari server agar tidak memicu error.
+    final isDelivery = fulfillment == Fulfillment.delivery;
+    final body = <String, dynamic>{
+      'delivery_type': isDelivery ? 'delivery' : 'pickup',
+      if (isDelivery && deliveryAddress.trim().isNotEmpty)
+        'delivery_address': deliveryAddress.trim(),
+      'delivery_fee': isDelivery ? deliveryFee : 0,
+    };
+
+    try {
+      await _api.patch('/api/laundry/orders/$id/delivery', body: body);
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) {
+        await _api.patch('/api/orders/$id/delivery', body: body);
+      } else {
+        rethrow;
+      }
+    }
     return get(id);
   }
 

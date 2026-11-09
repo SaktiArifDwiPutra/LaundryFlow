@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../config.dart';
+import '../api/api_exception.dart';
 import '../models/customer.dart';
 import '../models/order_option.dart';
 import '../models/service.dart';
@@ -120,8 +120,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     return sum;
   }
 
-  /// Ongkir hanya berlaku di mode mock (server belum punya field pengantaran).
-  int get _deliveryFee => useMock && _fulfillment == Fulfillment.delivery
+  int get _deliveryFee => _fulfillment == Fulfillment.delivery
       ? parseRupiah(_fee.text)
       : 0;
 
@@ -256,7 +255,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       inputs.add(r.input!);
     }
 
-    final delivery = useMock && _fulfillment == Fulfillment.delivery;
+    final delivery = _fulfillment == Fulfillment.delivery;
     if (delivery && _address.text.trim().isEmpty) {
       setState(() => _error = 'Alamat pengantaran wajib diisi.');
       return;
@@ -281,13 +280,16 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         lines: inputs,
         notes: _notes.text.trim(),
         priority: priority,
-        fulfillment: useMock ? _fulfillment : Fulfillment.pickup,
-        deliveryAddress: delivery ? _address.text : '',
+        fulfillment: _fulfillment,
+        deliveryAddress: delivery ? _address.text.trim() : '',
         deliveryFee: _deliveryFee,
       );
       if (!mounted) return;
       Navigator.of(context).pop(order);
     } on OrderValidationException catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.message);
+    } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _error = e.message);
     } catch (e) {
@@ -901,15 +903,14 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                       ),
                     ),
 
-                    if (useMock) ...[
-                      const SizedBox(height: 20),
-                      FulfillmentFields(
-                        value: _fulfillment,
-                        address: _address,
-                        fee: _fee,
-                        onChanged: (f) => setState(() => _fulfillment = f),
-                      ),
-                    ],
+                    const SizedBox(height: 20),
+                    FulfillmentFields(
+                      value: _fulfillment,
+                      address: _address,
+                      fee: _fee,
+                      onChanged: (f) => setState(() => _fulfillment = f),
+                      onFieldChanged: () => setState(() {}),
+                    ),
 
                     if (_error != null) ...[
                       const SizedBox(height: 14),
