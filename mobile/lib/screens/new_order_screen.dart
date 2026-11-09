@@ -897,17 +897,21 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                     color: accent,
                   ),
                   const SizedBox(width: 6),
-                  Text(
-                    'ITEM #${index + 1} • ${_serviceTypeBadge(line.service?.pricingType)}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: isDark ? Colors.white : accent,
-                      letterSpacing: 0.3,
+                  Expanded(
+                    child: Text(
+                      'ITEM #${index + 1} • ${_serviceTypeBadge(line.service?.pricingType)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? Colors.white : accent,
+                        letterSpacing: 0.3,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const Spacer(),
-                  if (line.service != null)
+                  if (line.service != null) ...[
+                    const SizedBox(width: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 7,
@@ -926,6 +930,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                         ),
                       ),
                     ),
+                  ],
                   if (_lines.length > 1) ...[
                     const SizedBox(width: 6),
                     InkWell(
@@ -1385,8 +1390,10 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                               : AppColors.lightSurfaceElevated,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        child: Wrap(
+                          spacing: 12,
+                          runSpacing: 4,
+                          alignment: WrapAlignment.spaceBetween,
                           children: [
                             Text(
                               'Layanan: ${formatRupiah(_servicesTotal)}',

@@ -444,66 +444,81 @@ class _OrderListScreenState extends State<OrderListScreen> {
                         ),
                         child: Row(
                           children: [
-                            Text(
-                              '${orders.length} Nota',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
-                                color: isDark
-                                    ? Colors.white
-                                    : AppColors.primaryDark,
+                            Expanded(
+                              child: Wrap(
+                                spacing: 6,
+                                runSpacing: 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Text(
+                                    '${orders.length} Nota',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                      color: isDark
+                                          ? Colors.white
+                                          : AppColors.primaryDark,
+                                    ),
+                                  ),
+                                  Container(
+                                    width: 4,
+                                    height: 4,
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.neutral,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.verified_rounded,
+                                        size: 13,
+                                        color: isDark
+                                            ? const Color(0xFF34D399)
+                                            : AppColors.success,
+                                      ),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        '$paidCount Lunas',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: isDark
+                                              ? const Color(0xFF6EE7B7)
+                                              : AppColors.successText,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (unpaidCount > 0)
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.pending_actions_rounded,
+                                          size: 13,
+                                          color: isDark
+                                              ? const Color(0xFFFDA4AF)
+                                              : AppColors.danger,
+                                        ),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          '$unpaidCount Belum',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: isDark
+                                                ? const Color(0xFFFDA4AF)
+                                                : AppColors.dangerText,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                ],
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Container(
-                              width: 4,
-                              height: 4,
-                              decoration: const BoxDecoration(
-                                color: AppColors.neutral,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Icon(
-                              Icons.verified_rounded,
-                              size: 13,
-                              color: isDark
-                                  ? const Color(0xFF34D399)
-                                  : AppColors.success,
-                            ),
-                            const SizedBox(width: 3),
-                            Text(
-                              '$paidCount Lunas',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: isDark
-                                    ? const Color(0xFF6EE7B7)
-                                    : AppColors.successText,
-                              ),
-                            ),
-                            if (unpaidCount > 0) ...[
-                              const SizedBox(width: 8),
-                              Icon(
-                                Icons.pending_actions_rounded,
-                                size: 13,
-                                color: isDark
-                                    ? const Color(0xFFFDA4AF)
-                                    : AppColors.danger,
-                              ),
-                              const SizedBox(width: 3),
-                              Text(
-                                '$unpaidCount Belum',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: isDark
-                                      ? const Color(0xFFFDA4AF)
-                                      : AppColors.dangerText,
-                                ),
-                              ),
-                            ],
-                            const Spacer(),
                             Text(
                               formatRupiah(totalNominal),
                               style: TextStyle(

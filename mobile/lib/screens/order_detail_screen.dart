@@ -437,18 +437,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              children: [
-                                StatusChip(status: order.status),
-                                if (order.priority == OrderPriority.express ||
-                                    order.priority ==
-                                        OrderPriority.sameDay) ...[
-                                  const SizedBox(width: 6),
-                                  PriorityBadge(label: order.priority.label),
+                            Expanded(
+                              child: Wrap(
+                                spacing: 6,
+                                runSpacing: 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  StatusChip(status: order.status),
+                                  if (order.priority == OrderPriority.express ||
+                                      order.priority == OrderPriority.sameDay)
+                                    PriorityBadge(label: order.priority.label),
                                 ],
-                              ],
+                              ),
                             ),
-                            DueLabel(order: order),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              flex: 0,
+                              child: DueLabel(order: order),
+                            ),
                           ],
                         ),
                       ),

@@ -143,12 +143,16 @@ class DueLabel extends StatelessWidget {
               color: isDark ? const Color(0xFFFDA4AF) : AppColors.dangerText,
             ),
             const SizedBox(width: 3.5),
-            Text(
-              'Terlambat ${formatOverdue(due)}',
-              style: TextStyle(
-                fontSize: 10.5,
-                color: isDark ? const Color(0xFFFDA4AF) : AppColors.dangerText,
-                fontWeight: FontWeight.w800,
+            Flexible(
+              child: Text(
+                'Terlambat ${formatOverdue(due)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  color: isDark ? const Color(0xFFFDA4AF) : AppColors.dangerText,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ],
@@ -165,12 +169,16 @@ class DueLabel extends StatelessWidget {
           color: isDark ? AppColors.darkTextSecondary : AppColors.neutral,
         ),
         const SizedBox(width: 3.5),
-        Text(
-          'Tenggat ${formatDue(due)}',
-          style: TextStyle(
-            fontSize: 11,
-            color: isDark ? AppColors.darkTextSecondary : AppColors.neutral,
-            fontWeight: FontWeight.w600,
+        Flexible(
+          child: Text(
+            'Tenggat ${formatDue(due)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              color: isDark ? AppColors.darkTextSecondary : AppColors.neutral,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],
