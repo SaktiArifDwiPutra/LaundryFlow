@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../models/order.dart';
 import '../models/order_option.dart';
+import '../models/order_status.dart';
 import '../repositories/order_repository.dart';
 import '../repositories/repositories.dart';
-import '../session.dart';
 import '../theme/app_colors.dart';
 import '../utils/format.dart';
 import '../widgets/order_tile.dart';
@@ -19,12 +19,6 @@ enum DashboardPeriod {
 
   const DashboardPeriod(this.label);
   final String label;
-}
-
-enum InvoiceFilterMode {
-  all,
-  paidOnly,
-  unpaidOnly,
 }
 
 typedef _DashboardData = ({
@@ -44,7 +38,6 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final _searchController = TextEditingController();
   DashboardPeriod _selectedPeriod = DashboardPeriod.today;
-  InvoiceFilterMode _invoiceFilter = InvoiceFilterMode.all;
   String _searchQuery = '';
   late Future<_DashboardData> _future;
 
@@ -105,7 +98,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       MaterialPageRoute(builder: (_) => const NewOrderScreen()),
     );
     if (created == null || !mounted) return;
-    _invoiceFilter = InvoiceFilterMode.all;
     _reload();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Nota #${created.number} berhasil diterbitkan')),
@@ -147,7 +139,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final user = currentUser.value;
     final topPadding = MediaQuery.of(context).padding.top;
     final now = DateTime.now();
 
@@ -165,7 +156,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       body: Column(
         children: [
-          // 1. Executive POS Header
+          // 1. Executive POS Header (Clean: Just greeting + calendar, NO extra branding, NO refresh button)
           Container(
             padding: EdgeInsets.fromLTRB(16, topPadding + 10, 16, 14),
             decoration: BoxDecoration(
@@ -209,71 +200,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Text(
-                                '${_greetingText()}${user != null ? ', ${user.name}' : ''}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 17,
-                                  color: Colors.white,
-                                  letterSpacing: -0.3,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
+                          Text(
+                            _greetingText(),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 18,
+                              color: Colors.white,
+                              letterSpacing: -0.3,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 2),
                           Row(
                             children: [
                               const Icon(
                                 Icons.calendar_today_rounded,
-                                size: 11.5,
+                                size: 12,
                                 color: Color(0xFFBFDBFE),
                               ),
-                              const SizedBox(width: 4),
+                              const SizedBox(width: 5),
                               Text(
                                 formatDateIndonesian(now),
                                 style: const TextStyle(
-                                  fontSize: 11.5,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: Color(0xFFDBEAFE),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              const Text(
-                                '• LaundryFlow POS',
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w500,
-                                  color: Color(0xFFBFDBFE),
                                 ),
                               ),
                             ],
                           ),
                         ],
-                      ),
-                    ),
-                    // Quick Refresh Action
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                      child: IconButton(
-                        tooltip: 'Perbarui Data Keuangan',
-                        constraints: const BoxConstraints(
-                          minWidth: 38,
-                          minHeight: 38,
-                        ),
-                        padding: EdgeInsets.zero,
-                        icon: const Icon(
-                          Icons.refresh_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                        onPressed: _reload,
                       ),
                     ),
                   ],
@@ -453,27 +410,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 final totalVolumeAll = serviceVolumeMap.values
                     .fold<double>(0.0, (sum, val) => sum + val);
 
-                // 3. Determine Invoices for Transaction Ledger
-                List<Order> ledgerOrders;
-                String ledgerTitle;
-                if (_searchQuery.isNotEmpty) {
-                  ledgerOrders = allOrders;
-                  ledgerTitle = 'Hasil Pencarian: ${ledgerOrders.length} Nota';
-                } else if (_invoiceFilter == InvoiceFilterMode.paidOnly) {
-                  ledgerOrders =
-                      periodOrders.where((o) => o.isPaid).toList();
-                  ledgerTitle =
-                      'Faktur Lunas ${_selectedPeriod.label} (${ledgerOrders.length} Nota)';
-                } else if (_invoiceFilter == InvoiceFilterMode.unpaidOnly) {
-                  ledgerOrders =
-                      periodOrders.where((o) => !o.isPaid).toList();
-                  ledgerTitle =
-                      'Tagihan Belum Lunas ${_selectedPeriod.label} (${ledgerOrders.length} Nota)';
-                } else {
-                  ledgerOrders = periodOrders;
-                  ledgerTitle =
-                      'Buku Transaksi ${_selectedPeriod.label} (${ledgerOrders.length} Nota)';
-                }
+                // 3. Transaction History (Completed and Paid orders only)
+                final baseOrders = _searchQuery.isNotEmpty ? allOrders : periodOrders;
+                final historyOrders = baseOrders
+                    .where((o) => o.status == OrderStatus.completed && o.isPaid)
+                    .toList();
 
                 return RefreshIndicator(
                   onRefresh: () async {
@@ -599,9 +540,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                                     onTap: () {
                                                       setState(() {
                                                         _selectedPeriod = p;
-                                                        _invoiceFilter =
-                                                            InvoiceFilterMode
-                                                                .all;
                                                       });
                                                     },
                                                     isDark: isDark,
@@ -633,14 +571,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                                         .withValues(alpha: 0.5)
                                                     : AppColors
                                                         .primaryContainerLight,
-                                                isSelected: _invoiceFilter ==
-                                                    InvoiceFilterMode.all,
-                                                onTap: () {
-                                                  setState(() =>
-                                                      _invoiceFilter =
-                                                          InvoiceFilterMode
-                                                              .all);
-                                                },
                                                 isDark: isDark,
                                               ),
                                             ),
@@ -659,13 +589,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                                     ? AppColors.violetDark
                                                         .withValues(alpha: 0.45)
                                                     : AppColors.violetLight,
-                                                isSelected: false,
-                                                onTap: () {
-                                                  setState(() =>
-                                                      _invoiceFilter =
-                                                          InvoiceFilterMode
-                                                              .all);
-                                                },
                                                 isDark: isDark,
                                               ),
                                             ),
@@ -688,14 +611,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                                     ? AppColors.tealDark
                                                         .withValues(alpha: 0.45)
                                                     : AppColors.tealLight,
-                                                isSelected: _invoiceFilter ==
-                                                    InvoiceFilterMode.paidOnly,
-                                                onTap: () {
-                                                  setState(() =>
-                                                      _invoiceFilter =
-                                                          InvoiceFilterMode
-                                                              .paidOnly);
-                                                },
                                                 isDark: isDark,
                                               ),
                                             ),
@@ -715,15 +630,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                                     ? AppColors.warmOrangeDark
                                                         .withValues(alpha: 0.45)
                                                     : AppColors.warmOrangeLight,
-                                                isSelected: _invoiceFilter ==
-                                                    InvoiceFilterMode
-                                                        .unpaidOnly,
-                                                onTap: () {
-                                                  setState(() =>
-                                                      _invoiceFilter =
-                                                          InvoiceFilterMode
-                                                              .unpaidOnly);
-                                                },
                                                 isDark: isDark,
                                               ),
                                             ),
@@ -1068,7 +974,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               const SizedBox(height: 18),
 
                               // ==========================================
-                              // SECTION D: BUKU TRANSAKSI & ARSIP FAKTUR
+                              // SECTION D: RIWAYAT TRANSAKSI (SELESAI & LUNAS)
                               // ==========================================
                               Padding(
                                 padding: const EdgeInsets.symmetric(
@@ -1087,87 +993,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                               width: 4,
                                               height: 15,
                                               decoration: BoxDecoration(
-                                                color: AppColors.primaryBright,
+                                                color: AppColors.teal,
                                                 borderRadius:
                                                     BorderRadius.circular(2),
                                               ),
                                             ),
                                             const SizedBox(width: 8),
-                                            Text(
-                                              ledgerTitle,
-                                              style: const TextStyle(
-                                                fontSize: 13.5,
+                                            const Text(
+                                              'Riwayat Transaksi',
+                                              style: TextStyle(
+                                                fontSize: 14,
                                                 fontWeight: FontWeight.w800,
                                                 letterSpacing: -0.2,
                                               ),
                                             ),
                                           ],
                                         ),
-                                        if (_invoiceFilter !=
-                                            InvoiceFilterMode.all)
-                                          TextButton.icon(
-                                            style: TextButton.styleFrom(
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.teal
+                                                .withValues(alpha: isDark ? 0.2 : 0.1),
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                            border: Border.all(
+                                              color: AppColors.teal
+                                                  .withValues(alpha: 0.3),
                                             ),
-                                            icon: const Icon(
-                                                Icons.close_rounded,
-                                                size: 14),
-                                            label: const Text(
-                                              'Reset Filter',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                            onPressed: () {
-                                              setState(() => _invoiceFilter =
-                                                  InvoiceFilterMode.all);
-                                            },
                                           ),
+                                          child: Text(
+                                            'SELESAI & LUNAS (${historyOrders.length})',
+                                            style: const TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w800,
+                                              color: AppColors.teal,
+                                            ),
+                                          ),
+                                        ),
                                       ],
                                     ),
-                                    const SizedBox(height: 8),
-                                    // Ledger Filter Buttons
-                                    if (_searchQuery.isEmpty)
-                                      Row(
-                                        children: [
-                                          _FilterChipButton(
-                                            label: 'Semua (${periodOrders.length})',
-                                            isSelected: _invoiceFilter ==
-                                                InvoiceFilterMode.all,
-                                            onTap: () => setState(() =>
-                                                _invoiceFilter =
-                                                    InvoiceFilterMode.all),
-                                            isDark: isDark,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          _FilterChipButton(
-                                            label: 'Lunas ($periodPaidCount)',
-                                            isSelected: _invoiceFilter ==
-                                                InvoiceFilterMode.paidOnly,
-                                            onTap: () => setState(() =>
-                                                _invoiceFilter =
-                                                    InvoiceFilterMode.paidOnly),
-                                            isDark: isDark,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          _FilterChipButton(
-                                            label:
-                                                'Belum Lunas ($periodUnpaidCount)',
-                                            isSelected: _invoiceFilter ==
-                                                InvoiceFilterMode.unpaidOnly,
-                                            onTap: () => setState(() =>
-                                                _invoiceFilter =
-                                                    InvoiceFilterMode
-                                                        .unpaidOnly),
-                                            isDark: isDark,
-                                          ),
-                                        ],
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Transaksi yang telah tuntas dikerjakan dan pembayaran lunas',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: isDark
+                                            ? AppColors.darkTextSecondary
+                                            : AppColors.lightTextSecondary,
                                       ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -1178,8 +1053,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ),
 
-                      // Invoices Ledger List
-                      if (ledgerOrders.isEmpty)
+                      // History Orders List
+                      if (historyOrders.isEmpty)
                         SliverToBoxAdapter(
                           child: Padding(
                             padding: const EdgeInsets.all(32),
@@ -1197,16 +1072,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       shape: BoxShape.circle,
                                     ),
                                     child: const Icon(
-                                      Icons.receipt_long_outlined,
+                                      Icons.verified_outlined,
                                       size: 32,
-                                      color: AppColors.neutral,
+                                      color: AppColors.teal,
                                     ),
                                   ),
                                   const SizedBox(height: 14),
                                   Text(
                                     _searchQuery.isNotEmpty
-                                        ? 'Tidak ditemukan transaksi "$_searchQuery"'
-                                        : 'Belum ada transaksi di periode ${_selectedPeriod.label}',
+                                        ? 'Tidak ditemukan riwayat selesai & lunas "$_searchQuery"'
+                                        : 'Belum Ada Transaksi Selesai & Lunas',
                                     style: textTheme.bodyLarge?.copyWith(
                                       fontWeight: FontWeight.w700,
                                     ),
@@ -1214,18 +1089,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
-                                    'Buat nota transaksi baru dengan tombol kasir di bawah.',
+                                    'Pesanan yang berstatus selesai dan telah lunas di periode ${_selectedPeriod.label} akan tampil di sini.',
                                     style: textTheme.bodySmall?.copyWith(
                                       color: AppColors.neutral,
                                     ),
                                     textAlign: TextAlign.center,
-                                  ),
-                                  const SizedBox(height: 14),
-                                  FilledButton.icon(
-                                    onPressed: _newOrder,
-                                    icon: const Icon(Icons.add_rounded,
-                                        size: 18),
-                                    label: const Text('Buat Nota Kasir'),
                                   ),
                                 ],
                               ),
@@ -1238,13 +1106,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           sliver: SliverList(
                             delegate: SliverChildBuilderDelegate(
                               (context, index) {
-                                final order = ledgerOrders[index];
+                                final order = historyOrders[index];
                                 return OrderTile(
                                   order: order,
                                   onTap: () => _openDetail(order),
                                 );
                               },
-                              childCount: ledgerOrders.length,
+                              childCount: historyOrders.length,
                             ),
                           ),
                         ),
@@ -1269,8 +1137,6 @@ class _ExecutiveKpiCard extends StatelessWidget {
     required this.icon,
     required this.accent,
     required this.bgTint,
-    required this.isSelected,
-    required this.onTap,
     required this.isDark,
   });
 
@@ -1280,98 +1146,82 @@ class _ExecutiveKpiCard extends StatelessWidget {
   final IconData icon;
   final Color accent;
   final Color bgTint;
-  final bool isSelected;
-  final VoidCallback onTap;
   final bool isDark;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark
+            ? AppColors.darkSurfaceElevated
+            : AppColors.lightSurfaceElevated,
         borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? accent.withValues(alpha: isDark ? 0.22 : 0.10)
-                : (isDark
-                    ? AppColors.darkSurfaceElevated
-                    : AppColors.lightSurfaceElevated),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isSelected
-                  ? accent
-                  : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
-              width: isSelected ? 1.8 : 1.0,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+          width: 1.0,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: bgTint,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(icon, size: 16, color: accent),
-                  ),
-                  Flexible(
-                    child: Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                        color: isDark
-                            ? AppColors.darkTextSecondary
-                            : AppColors.lightTextSecondary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: value.length > 10 ? 14 : 16,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white : AppColors.lightTextPrimary,
-                  letterSpacing: -0.3,
-                  fontFeatures: const [
-                    FontFeature.tabularFigures(),
-                  ],
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: bgTint,
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                child: Icon(icon, size: 16, color: accent),
               ),
-              const SizedBox(height: 1),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isSelected
-                      ? accent
-                      : (isDark
-                          ? AppColors.darkTextMuted
-                          : AppColors.lightTextMuted),
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              Flexible(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: isDark
+                        ? AppColors.darkTextSecondary
+                        : AppColors.lightTextSecondary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: value.length > 10 ? 14 : 16,
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : AppColors.lightTextPrimary,
+              letterSpacing: -0.3,
+              fontFeatures: const [
+                FontFeature.tabularFigures(),
+              ],
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 1),
+          Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: 10,
+              color: isDark
+                  ? AppColors.darkTextMuted
+                  : AppColors.lightTextMuted,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }
@@ -1590,60 +1440,6 @@ class _DashboardActionTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Filter Chip Button for Ledger
-class _FilterChipButton extends StatelessWidget {
-  const _FilterChipButton({
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-    required this.isDark,
-  });
-
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? AppColors.primaryBright.withValues(alpha: 0.14)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: isSelected
-                  ? AppColors.primaryBright
-                  : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
-              width: 1,
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-              color: isSelected
-                ? AppColors.primaryBright
-                : (isDark
-                    ? AppColors.darkTextSecondary
-                    : AppColors.lightTextSecondary),
-            ),
           ),
         ),
       ),

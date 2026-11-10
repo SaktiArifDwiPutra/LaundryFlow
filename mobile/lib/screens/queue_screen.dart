@@ -215,27 +215,6 @@ class _QueueScreenState extends State<QueueScreen> {
                         ],
                       ),
                     ),
-                    // Quick Refresh Action
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                      child: IconButton(
-                        tooltip: 'Muat Ulang Antrean',
-                        constraints: const BoxConstraints(
-                          minWidth: 38,
-                          minHeight: 38,
-                        ),
-                        padding: EdgeInsets.zero,
-                        icon: const Icon(
-                          Icons.refresh_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                        onPressed: _reload,
-                      ),
-                    ),
                   ],
                 ),
 
