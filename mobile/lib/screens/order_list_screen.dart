@@ -149,19 +149,22 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 Row(
                   children: [
                     Container(
-                      width: 38,
-                      height: 38,
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.16),
-                        borderRadius: BorderRadius.circular(11),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.25),
+                        ),
                       ),
                       child: const Icon(
                         Icons.receipt_long_rounded,
                         color: Colors.white,
-                        size: 20,
+                        size: 22,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
                     const Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,6 +177,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
                               color: Colors.white,
                               letterSpacing: -0.3,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           Text(
                             'Seluruh riwayat & status nota transaksi',
@@ -182,57 +187,70 @@ class _OrderListScreenState extends State<OrderListScreen> {
                               fontWeight: FontWeight.w500,
                               color: Color(0xFFDBEAFE),
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
-                    // Sort Toggle Pill
-                    Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _SortPillButton(
-                            label: 'Terbaru',
-                            selected: _sort == OrderSort.createdAt,
-                            onTap: () => _setSort(OrderSort.createdAt),
-                          ),
-                          _SortPillButton(
-                            label: 'Tenggat',
-                            selected: _sort == OrderSort.dueAt,
-                            onTap: () => _setSort(OrderSort.dueAt),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 6),
                     Container(
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(11),
                       ),
                       child: IconButton(
                         tooltip: 'Muat Ulang',
                         constraints: const BoxConstraints(
-                          minWidth: 36,
-                          minHeight: 36,
+                          minWidth: 38,
+                          minHeight: 38,
                         ),
                         padding: EdgeInsets.zero,
                         icon: const Icon(
                           Icons.refresh_rounded,
                           color: Colors.white,
-                          size: 19,
+                          size: 20,
                         ),
                         onPressed: _reload,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
+
+                // Sort Toggle Tabs (Berdasarkan Transaksi & Berdasarkan Tenggat) below title
+                Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.16),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _SortPillButton(
+                          icon: Icons.history_rounded,
+                          label: 'Berdasarkan Transaksi',
+                          selected: _sort == OrderSort.createdAt,
+                          onTap: () => _setSort(OrderSort.createdAt),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: _SortPillButton(
+                          icon: Icons.timer_outlined,
+                          label: 'Berdasarkan Tenggat',
+                          selected: _sort == OrderSort.dueAt,
+                          onTap: () => _setSort(OrderSort.dueAt),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
 
                 // Search Input Field inside Header
                 SizedBox(
@@ -566,28 +584,66 @@ class _SortPillButton extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.icon,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-        decoration: BoxDecoration(
-          color: selected ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            color: selected ? AppColors.primaryDark : Colors.white,
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7.5),
+          decoration: BoxDecoration(
+            color: selected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+            boxShadow: selected
+                ? const [
+                    BoxShadow(
+                      color: Color(0x33000000),
+                      blurRadius: 4,
+                      offset: Offset(0, 1.5),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(
+                  icon,
+                  size: 14,
+                  color: selected
+                      ? AppColors.primaryDark
+                      : const Color(0xFFDBEAFE),
+                ),
+                const SizedBox(width: 5),
+              ],
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: selected ? AppColors.primaryDark : Colors.white,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

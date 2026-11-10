@@ -128,6 +128,7 @@ class Order {
   bool get isPaid => paymentStatus == 'paid';
   bool get isPartial => paymentStatus == 'partial';
   bool get isUnpaid => paymentStatus == 'unpaid' || paymentStatus.isEmpty;
+  bool get isExpress => priority == OrderPriority.express;
 
   String get paymentLabel => switch (paymentStatus) {
         'paid' => 'Lunas',
