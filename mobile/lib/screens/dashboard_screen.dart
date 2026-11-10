@@ -5,6 +5,7 @@ import '../models/order_option.dart';
 import '../models/order_status.dart';
 import '../repositories/order_repository.dart';
 import '../repositories/repositories.dart';
+import '../session.dart';
 import '../theme/app_colors.dart';
 import '../utils/format.dart';
 import '../widgets/order_tile.dart';
@@ -139,6 +140,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final user = currentUser.value;
     final topPadding = MediaQuery.of(context).padding.top;
     final now = DateTime.now();
 
@@ -201,7 +203,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _greetingText(),
+                            user != null && user.name.isNotEmpty
+                                ? '${_greetingText()}, ${user.name}'
+                                : _greetingText(),
                             style: const TextStyle(
                               fontWeight: FontWeight.w800,
                               fontSize: 18,
