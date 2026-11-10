@@ -41,6 +41,11 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           return AlertDialog(
+            insetPadding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             title: const Row(
               children: [
                 Icon(Icons.chat_rounded, color: AppColors.teal),
@@ -50,6 +55,10 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
                     'Kirim Notifikasi WhatsApp',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ],
@@ -70,6 +79,7 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
                         value: 'invoice',
                         child: Text(
                           'Nota / Faktur Digital',
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -77,6 +87,7 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
                         value: 'ready',
                         child: Text(
                           'Cucian Siap Diambil / Diantar',
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -84,6 +95,7 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
                         value: 'reminder',
                         child: Text(
                           'Pengingat Cucian',
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -91,6 +103,7 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
                         value: 'custom',
                         child: Text(
                           'Pesan Kustom',
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -144,6 +157,13 @@ class _WhatsAppSectionState extends State<WhatsAppSection> {
                         showDialog(
                           context: ctx,
                           builder: (_) => AlertDialog(
+                            insetPadding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 24,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                             title: const Text('Pratinjau Pesan'),
                             content: SingleChildScrollView(
                               child: Container(

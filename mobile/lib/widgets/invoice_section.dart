@@ -61,6 +61,11 @@ class _InvoiceSectionState extends State<InvoiceSection> {
               : 0;
 
           return AlertDialog(
+            insetPadding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             title: const Row(
               children: [
                 Icon(Icons.point_of_sale_rounded, color: AppColors.primaryBright),

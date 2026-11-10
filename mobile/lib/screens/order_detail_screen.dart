@@ -1089,6 +1089,8 @@ class _FulfillmentDialogState extends State<_FulfillmentDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: const Row(
         children: [
           Icon(Icons.delivery_dining_rounded, color: AppColors.cyan),

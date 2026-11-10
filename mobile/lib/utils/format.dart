@@ -47,3 +47,25 @@ bool isWholeUnit(String unit) {
   const whole = {'pcs', 'pc', 'potong', 'buah', 'unit', 'units', 'set', 'lembar'};
   return whole.contains(unit.trim().toLowerCase());
 }
+
+String formatDateIndonesian(DateTime date) {
+  const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+  const months = [
+    'Januari',
+    'Februari',
+    'Maret',
+    'April',
+    'Mei',
+    'Juni',
+    'Juli',
+    'Agustus',
+    'September',
+    'Oktober',
+    'November',
+    'Desember',
+  ];
+  final d = date.toLocal();
+  final dayName = days[d.weekday % 7];
+  final monthName = months[d.month - 1];
+  return '$dayName, ${d.day} $monthName ${d.year}';
+}
