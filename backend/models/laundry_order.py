@@ -582,12 +582,81 @@ class LaundryOrder(models.Model):
             "payment_reference": self.payment_reference,
         }
 
+    def _prepare_invoice_lines(self):
+        """Menyiapkan baris rincian faktur (account.move.line) dari layanan, same day fee, dan ongkir."""
+        self.ensure_one()
+        income_account = self.env["account.account"].sudo().search(
+            [("account_type", "=", "income")], limit=1
+        )
+        lines = []
+
+        if self.line_ids:
+            for line in self.line_ids:
+                qty = line.area if line.pricing_type == "area" else line.quantity
+                product = line.product_template_id.product_variant_id
+                desc = line.product_template_id.name
+                if line.item_details:
+                    desc = f"{desc} ({line.item_details})"
+                lv = {
+                    "name": desc,
+                    "quantity": qty or 1.0,
+                    "price_unit": line.price_unit,
+                    "tax_ids": [(5, 0, 0)],
+                }
+                if product:
+                    lv["product_id"] = product.id
+                elif income_account:
+                    lv["account_id"] = income_account.id
+                lines.append(lv)
+        else:
+            lv = {
+                "name": f"Layanan Laundry ({self.name})",
+                "quantity": self.weight or 1.0,
+                "price_unit": self.price_per_kg or 0.0,
+                "tax_ids": [(5, 0, 0)],
+            }
+            if income_account:
+                lv["account_id"] = income_account.id
+            lines.append(lv)
+
+        if self.service_speed_fee and self.service_speed_fee > 0:
+            lv_speed = {
+                "name": "Biaya Layanan Same Day Service",
+                "quantity": 1.0,
+                "price_unit": self.service_speed_fee,
+                "tax_ids": [(5, 0, 0)],
+            }
+            if income_account:
+                lv_speed["account_id"] = income_account.id
+            lines.append(lv_speed)
+
+        if self.delivery_fee and self.delivery_fee > 0:
+            lv_deliv = {
+                "name": "Biaya Pengantaran (Delivery Fee)",
+                "quantity": 1.0,
+                "price_unit": self.delivery_fee,
+                "tax_ids": [(5, 0, 0)],
+            }
+            if income_account:
+                lv_deliv["account_id"] = income_account.id
+            lines.append(lv_deliv)
+
+        return lines
+
     def action_generate_invoice(self):
         """
-        Membuat faktur / invoice resmi di modul account.move Odoo jika belum ada.
+        Membuat faktur / invoice resmi di modul account.move Odoo beserta baris rincian tagihannya.
         """
         self.ensure_one()
+        line_vals = self._prepare_invoice_lines()
+
         if self.invoice_id:
+            if self.invoice_id.state == "draft" and not self.invoice_id.invoice_line_ids and line_vals:
+                self.invoice_id.sudo().write({
+                    "invoice_line_ids": [(0, 0, lv) for lv in line_vals]
+                })
+            if self.invoice_id.state == "draft" and self.invoice_id.invoice_line_ids:
+                self.invoice_id.sudo().action_post()
             return self.invoice_id
 
         invoice_vals = {
@@ -596,8 +665,11 @@ class LaundryOrder(models.Model):
             "invoice_date": fields.Date.today(),
             "ref": f"Laundry Order {self.name}",
             "invoice_origin": self.name,
+            "invoice_line_ids": [(0, 0, lv) for lv in line_vals],
         }
         invoice = self.env["account.move"].sudo().create(invoice_vals)
+        if invoice.invoice_line_ids:
+            invoice.sudo().action_post()
         self.sudo().write({"invoice_id": invoice.id})
         return invoice
 
